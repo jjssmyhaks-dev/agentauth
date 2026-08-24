@@ -1,0 +1,22 @@
+{
+  "name": "agentauth-sdk",
+  "version": "1.0.0",
+  "description": "TypeScript SDK for AgentAuth - Identity & Permissions for AI Agents",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": ["auth", "agent", "ai", "permissions", "identity"],
+  "author": "AgentAuth",
+  "license": "MIT",
+  "dependencies": {
+    "node-fetch": "^3.3.2"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3",
+    "@types/node": "^20.11.0"
+  }
+}

@@ -3,6 +3,7 @@ import {
   PrimaryGeneratedColumn,
   Column,
   CreateDateColumn,
+  UpdateDateColumn,
   ManyToOne,
   OneToMany,
   JoinColumn,
@@ -20,7 +21,7 @@ export class Agent {
   @Column({ type: 'uuid' })
   org_id: string;
 
-  @ManyToOne(() => Organization, (org) => org.agents)
+  @ManyToOne(() => Organization)
   @JoinColumn({ name: 'org_id' })
   organization: Organization;
 
@@ -44,6 +45,9 @@ export class Agent {
 
   @CreateDateColumn()
   created_at: Date;
+
+  @UpdateDateColumn()
+  updated_at: Date;
 
   @OneToMany(() => Grant, (grant) => grant.agent)
   grants: Grant[];

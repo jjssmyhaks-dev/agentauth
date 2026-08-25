@@ -3,10 +3,8 @@ import {
   PrimaryGeneratedColumn,
   Column,
   CreateDateColumn,
-  ManyToOne,
-  JoinColumn,
+  UpdateDateColumn,
 } from 'typeorm';
-import { Organization } from './organization.entity';
 
 @Entity('webhooks')
 export class Webhook {
@@ -15,10 +13,6 @@ export class Webhook {
 
   @Column({ type: 'uuid' })
   org_id: string;
-
-  @ManyToOne(() => Organization, (org) => org.webhooks)
-  @JoinColumn({ name: 'org_id' })
-  organization: Organization;
 
   @Column()
   url: string;
@@ -29,9 +23,15 @@ export class Webhook {
   @Column()
   secret: string;
 
+  @Column({ default: 'active' })
+  status: 'active' | 'disabled';
+
+  @Column({ type: 'int', default: 0 })
+  failure_count: number;
+
   @CreateDateColumn()
   created_at: Date;
 
-  @Column({ default: 'active' })
-  status: 'active' | 'inactive';
+  @UpdateDateColumn()
+  updated_at: Date;
 }

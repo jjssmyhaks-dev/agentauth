@@ -3,6 +3,7 @@ import {
   PrimaryGeneratedColumn,
   Column,
   CreateDateColumn,
+  UpdateDateColumn,
   ManyToOne,
   JoinColumn,
 } from 'typeorm';
@@ -26,24 +27,27 @@ export class PendingApproval {
   @Column()
   resource: string;
 
-  @Column('jsonb', { nullable: true })
+  @Column({ type: 'jsonb', nullable: true })
   context: any;
 
-  @CreateDateColumn()
-  requested_at: Date;
-
-  @Column('timestamp', { nullable: true })
-  decided_at: Date;
-
-  @Column({ type: 'uuid', nullable: true })
-  decided_by_user_id: string;
+  @Column({ default: 'pending' })
+  status: 'pending' | 'approved' | 'denied';
 
   @Column({ nullable: true })
   decision: 'approved' | 'denied';
 
+  @Column({ type: 'uuid', nullable: true })
+  decided_by_user_id: string;
+
+  @Column({ type: 'timestamp', nullable: true })
+  decided_at: Date;
+
   @Column({ nullable: true })
   reason: string;
 
-  @Column({ default: 'pending' })
-  status: 'pending' | 'approved' | 'denied';
+  @CreateDateColumn()
+  requested_at: Date;
+
+  @UpdateDateColumn()
+  updated_at: Date;
 }

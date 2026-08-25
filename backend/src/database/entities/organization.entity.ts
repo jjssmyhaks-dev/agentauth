@@ -3,13 +3,9 @@ import {
   PrimaryGeneratedColumn,
   Column,
   CreateDateColumn,
+  UpdateDateColumn,
   OneToMany,
 } from 'typeorm';
-import { Agent } from './agent.entity';
-import { Grant } from './grant.entity';
-import { AuditLog } from './audit-log.entity';
-import { Webhook } from './webhook.entity';
-import { User } from './user.entity';
 
 @Entity('organizations')
 export class Organization {
@@ -19,24 +15,21 @@ export class Organization {
   @Column()
   name: string;
 
-  @CreateDateColumn()
-  created_at: Date;
-
   @Column({ default: 'autonomous' })
   default_approval_mode: 'autonomous' | 'human_in_the_loop';
 
-  @OneToMany(() => Agent, (agent) => agent.organization)
-  agents: Agent[];
+  @Column({ type: 'jsonb', default: '{}' })
+  action_overrides: Record<string, string>;
 
-  @OneToMany(() => User, (user) => user.organization)
-  users: User[];
+  @Column({ type: 'jsonb', nullable: true })
+  settings: {
+    token_ttl_minutes?: number;
+    ip_allowlist?: string[];
+  };
 
-  @OneToMany(() => Grant, (grant) => grant.organization)
-  grants: Grant[];
+  @CreateDateColumn()
+  created_at: Date;
 
-  @OneToMany(() => AuditLog, (log) => log.organization)
-  audit_logs: AuditLog[];
-
-  @OneToMany(() => Webhook, (webhook) => webhook.organization)
-  webhooks: Webhook[];
+  @UpdateDateColumn()
+  updated_at: Date;
 }

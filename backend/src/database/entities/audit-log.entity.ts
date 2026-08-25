@@ -3,22 +3,17 @@ import {
   PrimaryGeneratedColumn,
   Column,
   CreateDateColumn,
-  ManyToOne,
-  JoinColumn,
+  Index,
 } from 'typeorm';
-import { Organization } from './organization.entity';
 
 @Entity('audit_log')
+@Index(['org_id', 'timestamp'])
 export class AuditLog {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
   @Column({ type: 'uuid' })
   org_id: string;
-
-  @ManyToOne(() => Organization, (org) => org.audit_logs)
-  @JoinColumn({ name: 'org_id' })
-  organization: Organization;
 
   @Column()
   actor_type: 'agent' | 'user';
@@ -35,12 +30,15 @@ export class AuditLog {
   @Column()
   result: 'allowed' | 'denied' | 'pending';
 
-  @CreateDateColumn()
+  @Column()
   timestamp: Date;
 
-  @Column('text', { nullable: true })
+  @Column()
   prev_hash: string;
 
-  @Column('text')
+  @Column()
   hash: string;
+
+  @CreateDateColumn()
+  created_at: Date;
 }

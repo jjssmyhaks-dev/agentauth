@@ -20,15 +20,18 @@ export class TokenIssued {
   @JoinColumn({ name: 'agent_id' })
   agent: Agent;
 
-  @Column({ unique: true })
+  @Column()
   jti: string;
 
   @CreateDateColumn()
   issued_at: Date;
 
-  @Column('timestamp')
+  @Column()
   expires_at: Date;
 
-  @Column('jsonb')
-  scopes_snapshot: any;
+  @Column({ type: 'jsonb', default: '[]' })
+  scopes_snapshot: any[];
+
+  @Column({ nullable: true })
+  revoked: boolean;
 }

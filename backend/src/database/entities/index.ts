@@ -1,8 +1,8 @@
-export * from './organization.entity';
-export * from './user.entity';
-export * from './agent.entity';
-export * from './grant.entity';
-export * from './token-issued.entity';
-export * from './pending-approval.entity';
-export * from './audit-log.entity';
-export * from './webhook.entity';
+export { Organization } from './organization.entity';
+export { User } from './user.entity';
+export { Agent } from './agent.entity';
+export { Grant } from './grant.entity';
+export { TokenIssued } from './token-issued.entity';
+export { PendingApproval } from './pending-approval.entity';
+export { AuditLog } from './audit-log.entity';
+export { Webhook } from './webhook.entity';

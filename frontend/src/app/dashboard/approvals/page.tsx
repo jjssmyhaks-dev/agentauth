@@ -1,144 +1,84 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Check, X, Clock } from 'lucide-react';
+import { Check, X } from 'lucide-react';
+import { TableSkeleton } from '@/components/loading-skeleton';
 import { approvalsApi } from '@/lib/api';
 
-interface Approval {
-  id: string;
-  agent_id: string;
-  action: string;
-  resource: string;
-  status: string;
-  requested_at: string;
-  context: any;
-}
-
 export default function ApprovalsPage() {
-  const [approvals, setApprovals] = useState<Approval[]>([]);
+  const [approvals, setApprovals] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<string>('pending');
+  const [orgId] = useState('00000000-0000-0000-0000-000000000001');
+  const [filter, setFilter] = useState('pending');
 
-  useEffect(() => {
-    fetchApprovals();
-  }, [filter]);
+  useEffect(() => { loadApprovals(); }, [filter]);
 
-  const fetchApprovals = async () => {
-    const orgId = 'demo-org-id';
-    const { data } = await approvalsApi.list(orgId, filter);
-    if (data) setApprovals(data);
+  async function loadApprovals() {
+    setLoading(true);
+    const res = await approvalsApi.list(orgId, filter);
+    setApprovals(Array.isArray(res.data) ? res.data : []);
     setLoading(false);
-  };
+  }
 
-  const handleDecision = async (approvalId: string, decision: 'approve' | 'deny') => {
-    const userId = 'demo-user-id';
-    const { data } = await approvalsApi.decide(approvalId, decision, userId);
-    if (data) fetchApprovals();
-  };
+  async function decide(id: string, decision: 'approve' | 'deny') {
+    await approvalsApi.decide(id, decision, '00000000-0000-0000-0000-000000000001');
+    loadApprovals();
+  }
 
   return (
-    <div>
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-xl font-semibold">Approvals</h1>
-          <p className="text-sm text-gray-500 mt-1">
-            Review and decide on pending agent actions.
-          </p>
-        </div>
-        <div className="flex bg-gray-100 rounded-lg p-0.5">
-          {['pending', 'approved', 'denied'].map((status) => (
-            <button
-              key={status}
-              onClick={() => setFilter(status)}
-              className={`px-3 py-1.5 text-sm rounded-md capitalize transition-colors ${
-                filter === status
-                  ? 'bg-white text-gray-900 font-medium shadow-sm'
-                  : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              {status}
-            </button>
-          ))}
-        </div>
+    <div className="animate-fade-in">
+      <div className="mb-6">
+        <h1 className="text-xl font-semibold text-gray-900 dark:text-white">Approvals</h1>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Review and decide pending agent actions.</p>
       </div>
 
-      <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
-        {loading ? (
-          <div className="px-4 py-8 text-center text-sm text-gray-500">Loading...</div>
-        ) : approvals.length === 0 ? (
-          <div className="px-4 py-12 text-center">
-            <Clock className="w-8 h-8 text-gray-300 mx-auto mb-3" />
-            <p className="text-sm font-medium text-gray-900 mb-1">No {filter} approvals</p>
-            <p className="text-sm text-gray-500">
-              {filter === 'pending'
-                ? 'All caught up. New approvals will appear here.'
-                : `No ${filter} approvals to show.`}
-            </p>
-          </div>
-        ) : (
-          <div className="divide-y divide-gray-100">
-            {approvals.map((approval) => (
-              <div key={approval.id} className="px-4 py-4 hover:bg-gray-50 transition-colors">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <div className="flex items-center gap-3 mb-1">
-                      <span
-                        className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-                          approval.status === 'pending'
-                            ? 'bg-yellow-50 text-yellow-700'
-                            : approval.status === 'approved'
-                            ? 'bg-green-50 text-green-700'
-                            : 'bg-red-50 text-red-700'
-                        }`}
-                      >
-                        {approval.status}
-                      </span>
-                      <span className="text-xs text-gray-400">
-                        {new Date(approval.requested_at).toLocaleString('en-US', {
-                          month: 'short',
-                          day: 'numeric',
-                          hour: 'numeric',
-                          minute: '2-digit',
-                        })}
-                      </span>
-                    </div>
-                    <div className="text-sm font-medium">{approval.action}</div>
-                    <div className="text-xs text-gray-500 mt-0.5">
-                      Resource: <span className="font-mono">{approval.resource}</span>
-                    </div>
-                    <div className="text-xs text-gray-400 mt-0.5">Agent: {approval.agent_id}</div>
-                  </div>
+      <div className="flex gap-2 mb-4">
+        {['pending', 'approved', 'denied'].map((f) => (
+          <button key={f} onClick={() => setFilter(f)}
+            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+              filter === f ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
+            }`}>
+            {f.charAt(0).toUpperCase() + f.slice(1)}
+          </button>
+        ))}
+      </div>
 
-                  {approval.status === 'pending' && (
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => handleDecision(approval.id, 'approve')}
-                        className="flex items-center gap-1.5 px-3 py-1.5 bg-green-50 text-green-700 text-sm font-medium rounded-lg hover:bg-green-100 transition-colors"
-                      >
-                        <Check className="w-3.5 h-3.5" />
-                        Approve
-                      </button>
-                      <button
-                        onClick={() => handleDecision(approval.id, 'deny')}
-                        className="flex items-center gap-1.5 px-3 py-1.5 bg-red-50 text-red-700 text-sm font-medium rounded-lg hover:bg-red-100 transition-colors"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                        Deny
-                      </button>
-                    </div>
-                  )}
+      {loading ? <TableSkeleton /> : approvals.length === 0 ? (
+        <div className="text-center py-16 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl">
+          <p className="text-gray-500 dark:text-gray-400">No {filter} approvals.</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {approvals.map((a) => (
+            <div key={a.id} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-5 flex items-center justify-between">
+              <div>
+                <div className="font-medium text-gray-900 dark:text-white">{a.action}</div>
+                <div className="text-sm text-gray-500 dark:text-gray-400">{a.resource}</div>
+                <div className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                  Agent: {a.agent?.name || a.agent_id?.substring(0, 8)} · {new Date(a.requested_at).toLocaleString()}
                 </div>
-
-                {approval.context && (
-                  <pre className="mt-3 p-3 bg-gray-50 rounded-lg text-xs text-gray-600 font-mono overflow-x-auto">
-                    {JSON.stringify(approval.context, null, 2)}
-                  </pre>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className={`text-xs px-2 py-1 rounded-full ${
+                  a.status === 'pending' ? 'bg-yellow-50 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' :
+                  a.status === 'approved' ? 'bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
+                  'bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+                }`}>{a.status}</span>
+                {a.status === 'pending' && (
+                  <>
+                    <button onClick={() => decide(a.id, 'approve')} className="p-1.5 rounded-lg bg-green-50 hover:bg-green-100 dark:bg-green-900/20 dark:hover:bg-green-900/40" title="Approve">
+                      <Check className="w-4 h-4 text-green-600 dark:text-green-400" />
+                    </button>
+                    <button onClick={() => decide(a.id, 'deny')} className="p-1.5 rounded-lg bg-red-50 hover:bg-red-100 dark:bg-red-900/20 dark:hover:bg-red-900/40" title="Deny">
+                      <X className="w-4 h-4 text-red-600 dark:text-red-400" />
+                    </button>
+                  </>
                 )}
               </div>
-            ))}
-          </div>
-        )}
-      </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

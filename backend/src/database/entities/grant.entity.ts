@@ -3,11 +3,11 @@ import {
   PrimaryGeneratedColumn,
   Column,
   CreateDateColumn,
+  UpdateDateColumn,
   ManyToOne,
   JoinColumn,
 } from 'typeorm';
 import { Agent } from './agent.entity';
-import { Organization } from './organization.entity';
 
 @Entity('grants')
 export class Grant {
@@ -24,10 +24,6 @@ export class Grant {
   @Column({ type: 'uuid' })
   org_id: string;
 
-  @ManyToOne(() => Organization, (org) => org.grants)
-  @JoinColumn({ name: 'org_id' })
-  organization: Organization;
-
   @Column()
   resource_type: string;
 
@@ -37,24 +33,27 @@ export class Grant {
   @Column('simple-array')
   allowed_actions: string[];
 
-  @Column({ type: 'uuid' })
+  @Column({ type: 'uuid', nullable: true })
   created_by_user_id: string;
 
-  @Column('timestamp', { nullable: true })
+  @Column({ type: 'timestamp', nullable: true })
   expires_at: Date;
 
-  @Column('timestamp', { nullable: true })
+  @Column({ type: 'timestamp', nullable: true })
   revoked_at: Date;
 
-  @Column({ nullable: true })
+  @Column({ type: 'int', nullable: true })
   usage_cap: number;
 
-  @Column({ default: 0 })
+  @Column({ type: 'int', default: 0 })
   usage_count: number;
+
+  @Column({ default: 'active' })
+  status: 'active' | 'expired' | 'revoked';
 
   @CreateDateColumn()
   created_at: Date;
 
-  @Column({ default: 'active' })
-  status: 'active' | 'expired' | 'revoked';
+  @UpdateDateColumn()
+  updated_at: Date;
 }

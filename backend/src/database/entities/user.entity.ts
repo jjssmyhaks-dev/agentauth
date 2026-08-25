@@ -16,7 +16,7 @@ export class User {
   @Column({ type: 'uuid' })
   org_id: string;
 
-  @ManyToOne(() => Organization, (org) => org.users)
+  @ManyToOne(() => Organization)
   @JoinColumn({ name: 'org_id' })
   organization: Organization;
 
@@ -24,7 +24,7 @@ export class User {
   email: string;
 
   @Column({ default: 'member' })
-  role: 'admin' | 'ops' | 'member';
+  role: 'owner' | 'admin' | 'member';
 
   @CreateDateColumn()
   created_at: Date;

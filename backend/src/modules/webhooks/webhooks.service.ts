@@ -1,116 +1,106 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Webhook } from '../../database/entities';
 import * as crypto from 'crypto';
+import { Webhook } from '../../database/entities';
 
 @Injectable()
 export class WebhooksService {
+  private readonly logger = new Logger(WebhooksService.name);
+
   constructor(
     @InjectRepository(Webhook)
-    private webhookRepository: Repository<Webhook>,
+    private webhookRepo: Repository<Webhook>,
   ) {}
 
-  async createWebhook(
-    orgId: string,
-    url: string,
-    eventTypes: string[],
-    secret: string,
-  ): Promise<Webhook> {
-    const webhook = this.webhookRepository.create({
+  async create(orgId: string, url: string, eventTypes: string[], secret: string): Promise<Webhook> {
+    const webhook = this.webhookRepo.create({
       org_id: orgId,
       url,
       event_types: eventTypes,
       secret,
       status: 'active',
     });
-
-    return this.webhookRepository.save(webhook);
+    this.logger.log(`Webhook created for org ${orgId}: ${url}`);
+    return this.webhookRepo.save(webhook);
   }
 
-  async getWebhooksByOrg(orgId: string): Promise<Webhook[]> {
-    return this.webhookRepository.find({
-      where: { org_id: orgId },
-      order: { created_at: 'DESC' },
-    });
+  async findByOrg(orgId: string): Promise<Webhook[]> {
+    return this.webhookRepo.find({ where: { org_id: orgId }, order: { created_at: 'DESC' } });
   }
 
-  async getWebhook(webhookId: string): Promise<Webhook> {
-    const webhook = await this.webhookRepository.findOne({
-      where: { id: webhookId },
-    });
-
-    if (!webhook) {
-      throw new NotFoundException('Webhook not found');
-    }
-
+  async findOne(id: string): Promise<Webhook> {
+    const webhook = await this.webhookRepo.findOne({ where: { id } });
+    if (!webhook) throw new NotFoundException(`Webhook ${id} not found`);
     return webhook;
   }
 
-  async deleteWebhook(webhookId: string): Promise<void> {
-    const webhook = await this.getWebhook(webhookId);
-    await this.webhookRepository.remove(webhook);
+  async remove(id: string): Promise<void> {
+    const webhook = await this.findOne(id);
+    await this.webhookRepo.remove(webhook);
+    this.logger.log(`Webhook deleted: ${id}`);
   }
 
-  async testWebhook(webhookId: string): Promise<{ success: boolean; message: string }> {
-    const webhook = await this.getWebhook(webhookId);
+  async test(id: string): Promise<{ success: boolean; message: string }> {
+    const webhook = await this.findOne(id);
+    const payload = {
+      event: 'webhook.test',
+      timestamp: new Date().toISOString(),
+      data: { webhook_id: webhook.id },
+    };
+    return this.deliverWithRetry(webhook, payload);
+  }
 
-    try {
-      const testPayload = {
-        event: 'webhook.test',
-        timestamp: new Date().toISOString(),
-        data: { webhook_id: webhook.id },
-      };
+  async deliver(webhookId: string, eventType: string, payload: any): Promise<void> {
+    const webhook = await this.findOne(webhookId);
+    if (!webhook.event_types.includes(eventType) && !webhook.event_types.includes('*')) return;
 
-      const signature = this.generateSignature(testPayload, webhook.secret);
-
-      // In production, this would make an actual HTTP request
-      // For now, return success
-      return {
-        success: true,
-        message: 'Test webhook sent successfully',
-      };
-    } catch (error) {
-      return {
-        success: false,
-        message: `Failed to send test webhook: ${error.message}`,
-      };
+    const result = await this.deliverWithRetry(webhook, { event: eventType, data: payload, timestamp: new Date().toISOString() });
+    if (!result.success) {
+      webhook.failure_count++;
+      await this.webhookRepo.save(webhook);
     }
   }
 
-  async deliverWebhook(
-    webhookId: string,
-    eventType: string,
+  private async deliverWithRetry(
+    webhook: Webhook,
     payload: any,
-  ): Promise<{ success: boolean; error?: string }> {
-    const webhook = await this.getWebhook(webhookId);
+    maxRetries = 5,
+  ): Promise<{ success: boolean; message: string }> {
+    const body = JSON.stringify(payload);
+    const signature = crypto.createHmac('sha256', webhook.secret).update(body).digest('hex');
 
-    if (!webhook.event_types.includes(eventType) && !webhook.event_types.includes('*')) {
-      return { success: false, error: 'Event type not subscribed' };
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      try {
+        const response = await fetch(webhook.url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-AgentAuth-Signature': signature,
+            'X-AgentAuth-Event': payload.event,
+            'User-Agent': 'AgentAuth-Webhook/1.0',
+          },
+          body,
+          signal: AbortSignal.timeout(10000),
+        });
+
+        if (response.ok) {
+          this.logger.log(`Webhook delivered: ${webhook.url} (attempt ${attempt + 1})`);
+          return { success: true, message: 'Delivered' };
+        }
+
+        this.logger.warn(`Webhook ${webhook.url} returned ${response.status} (attempt ${attempt + 1})`);
+      } catch (err) {
+        this.logger.warn(`Webhook ${webhook.url} failed attempt ${attempt + 1}: ${err.message}`);
+      }
+
+      // Exponential backoff
+      if (attempt < maxRetries - 1) {
+        await new Promise((r) => setTimeout(r, Math.pow(2, attempt) * 1000));
+      }
     }
 
-    try {
-      const signature = this.generateSignature(payload, webhook.secret);
-      
-      // In production, this would use BullMQ for reliable delivery
-      // with exponential backoff retry
-      console.log(`Delivering webhook to ${webhook.url}:`, {
-        eventType,
-        signature,
-        payload,
-      });
-
-      return { success: true };
-    } catch (error) {
-      return { success: false, error: error.message };
-    }
-  }
-
-  private generateSignature(payload: any, secret: string): string {
-    const data = JSON.stringify(payload);
-    return crypto
-      .createHmac('sha256', secret)
-      .update(data)
-      .digest('hex');
+    this.logger.error(`Webhook delivery failed after ${maxRetries} attempts: ${webhook.url}`);
+    return { success: false, message: `Failed after ${maxRetries} attempts` };
   }
 }

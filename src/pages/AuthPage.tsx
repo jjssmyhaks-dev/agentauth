@@ -1,19 +1,59 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { motion, AnimatePresence } from "framer-motion";
+import { Check, X } from "lucide-react";
+
+function getPasswordStrength(pw: string): { score: number; label: string; color: string } {
+  let score = 0;
+  if (pw.length >= 8) score++;
+  if (pw.length >= 12) score++;
+  if (/[A-Z]/.test(pw)) score++;
+  if (/[0-9]/.test(pw)) score++;
+  if (/[^A-Za-z0-9]/.test(pw)) score++;
+  if (score <= 1) return { score, label: "Weak", color: "bg-red-500" };
+  if (score <= 2) return { score, label: "Fair", color: "bg-amber-500" };
+  if (score <= 3) return { score, label: "Good", color: "bg-blue-500" };
+  return { score, label: "Strong", color: "bg-green-500" };
+}
+
+function PasswordChecklist({ password }: { password: string }) {
+  const checks = [
+    { label: "At least 8 characters", met: password.length >= 8 },
+    { label: "At least one uppercase letter", met: /[A-Z]/.test(password) },
+    { label: "At least one number", met: /[0-9]/.test(password) },
+    { label: "At least one special character", met: /[^A-Za-z0-9]/.test(password) },
+  ];
+  return (
+    <div className="space-y-1.5">
+      {checks.map((c) => (
+        <div key={c.label} className="flex items-center gap-2 text-xs">
+          {c.met ? <Check className="h-3 w-3 text-green-500" /> : <X className="h-3 w-3 text-muted-foreground" />}
+          <span className={c.met ? "text-green-600 dark:text-green-400" : "text-muted-foreground"}>{c.label}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export default function AuthPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isSignUp, setIsSignUp] = useState(false);
   const [error, setError] = useState("");
+  const [rememberMe, setRememberMe] = useState(true);
   const { signIn, signUp, isLoading } = useAuth();
   const navigate = useNavigate();
+
+  const strength = useMemo(() => getPasswordStrength(password), [password]);
+  const isValidEmail = email.includes("@") && email.includes(".");
+  const isFormValid = isValidEmail && password.length >= 6 && (!isSignUp || password.length >= 8);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    if (!isValidEmail) { setError("Please enter a valid email address"); return; }
+    if (isSignUp && password.length < 8) { setError("Password must be at least 8 characters"); return; }
     try {
       if (isSignUp) {
         await signUp(email, password, email.split("@")[0]);
@@ -77,7 +117,22 @@ export default function AuthPage() {
                 className="w-full rounded-xl border border-hairline bg-background px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring transition-shadow"
                 placeholder="Enter your password" required minLength={6}
               />
+              {isSignUp && password.length > 0 && (
+                <div className="mt-2 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 h-1 rounded-full bg-muted overflow-hidden">
+                      <motion.div initial={{ width: 0 }} animate={{ width: `${(strength.score / 5) * 100}%` }} transition={{ duration: 0.3 }} className={`h-full rounded-full ${strength.color}`} />
+                    </div>
+                    <span className="text-xs text-muted-foreground w-10 text-right">{strength.label}</span>
+                  </div>
+                  <PasswordChecklist password={password} />
+                </div>
+              )}
             </div>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" checked={rememberMe} onChange={(e) => setRememberMe(e.target.checked)} className="rounded border-hairline accent-foreground" />
+              <span className="text-sm text-muted-foreground">Remember me</span>
+            </label>
             <AnimatePresence>
               {error && (
                 <motion.div
@@ -91,7 +146,7 @@ export default function AuthPage() {
               )}
             </AnimatePresence>
             <motion.button
-              type="submit" disabled={isLoading}
+              type="submit" disabled={isLoading || !isFormValid}
               whileHover={{ scale: 1.01 }}
               whileTap={{ scale: 0.98 }}
               className="w-full rounded-full bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition-all hover:shadow-lg hover:shadow-foreground/10 disabled:opacity-50"

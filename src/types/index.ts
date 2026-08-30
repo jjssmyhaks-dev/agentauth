@@ -22,6 +22,27 @@ export interface Agent {
   actionsDenied: number;
   tier: string;
   tags: string[];
+  sessionHistory?: SessionEntry[];
+  keyRotationHistory?: KeyRotationEntry[];
+}
+
+export interface SessionEntry {
+  id: string;
+  startedAt: string;
+  endedAt: string | null;
+  tokensUsed: number;
+  actionsPerformed: number;
+  ipAddress: string;
+  userAgent: string;
+}
+
+export interface KeyRotationEntry {
+  id: string;
+  rotatedAt: string;
+  oldFingerprint: string;
+  newFingerprint: string;
+  reason: string;
+  initiatedBy: string;
 }
 
 export interface Grant {

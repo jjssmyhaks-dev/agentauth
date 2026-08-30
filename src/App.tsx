@@ -21,6 +21,20 @@ const ApiKeysPage = lazy(() => import("@/pages/dashboard/ApiKeysPage"));
 const SettingsPage = lazy(() => import("@/pages/dashboard/SettingsPage"));
 const DocsPage = lazy(() => import("@/pages/dashboard/DocsPage"));
 const NotificationsPage = lazy(() => import("@/pages/dashboard/NotificationsPage"));
+const ProductPage = lazy(() => import("@/pages/public/ProductPage"));
+const FeaturesPage = lazy(() => import("@/pages/public/FeaturesPage"));
+const PricingPage = lazy(() => import("@/pages/public/PricingPage"));
+const DocsLandingPage = lazy(() => import("@/pages/public/DocsPage"));
+const ChangelogPage = lazy(() => import("@/pages/public/ChangelogPage"));
+const StatusPage = lazy(() => import("@/pages/public/StatusPage"));
+const AboutPage = lazy(() => import("@/pages/public/AboutPage"));
+const BlogPage = lazy(() => import("@/pages/public/BlogPage"));
+const ContactPage = lazy(() => import("@/pages/public/ContactPage"));
+const SDKsPage = lazy(() => import("@/pages/public/SDKsPage"));
+const APIReferencePage = lazy(() => import("@/pages/public/APIReferencePage"));
+const PrivacyPage = lazy(() => import("@/pages/public/PrivacyPage"));
+const TermsPage = lazy(() => import("@/pages/public/TermsPage"));
+const SecurityPage = lazy(() => import("@/pages/public/SecurityPage"));
 
 function PageLoader() {
   return (
@@ -56,6 +70,20 @@ function AppRoutes() {
     <Routes>
       <Route path="/" element={<LandingPage />} />
       <Route path="/auth" element={<AuthRoute />} />
+      <Route path="/product" element={<ProductPage />} />
+      <Route path="/features" element={<FeaturesPage />} />
+      <Route path="/pricing" element={<PricingPage />} />
+      <Route path="/docs" element={<DocsLandingPage />} />
+      <Route path="/changelog" element={<ChangelogPage />} />
+      <Route path="/status" element={<StatusPage />} />
+      <Route path="/about" element={<AboutPage />} />
+      <Route path="/blog" element={<BlogPage />} />
+      <Route path="/contact" element={<ContactPage />} />
+      <Route path="/sdks" element={<SDKsPage />} />
+      <Route path="/api-reference" element={<APIReferencePage />} />
+      <Route path="/privacy" element={<PrivacyPage />} />
+      <Route path="/terms" element={<TermsPage />} />
+      <Route path="/security" element={<SecurityPage />} />
       <Route
         path="/dashboard"
         element={

@@ -111,11 +111,23 @@ export default function OverviewPage() {
     }
   }, [approvals, denyRequest, addNotification]);
 
+  const [currentTime, setCurrentTime] = useState(new Date());
+  useEffect(() => {
+    const t = setInterval(() => setCurrentTime(new Date()), 1000);
+    return () => clearInterval(t);
+  }, []);
+
   return (
     <div className="space-y-6">
-      <motion.div {...fadeIn} transition={{ duration: 0.4 }}>
-        <h1 className="text-2xl font-serif">Overview</h1>
-        <p className="text-sm text-muted-foreground">Monitor your agents, approvals, and activity.</p>
+      <motion.div {...fadeIn} transition={{ duration: 0.4 }} className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-serif">Overview</h1>
+          <p className="text-sm text-muted-foreground">Monitor your agents, approvals, and activity.</p>
+        </div>
+        <div className="text-right">
+          <p className="text-sm font-mono text-muted-foreground">{currentTime.toLocaleTimeString()}</p>
+          <p className="text-xs text-muted-foreground">{currentTime.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
+        </div>
       </motion.div>
 
       <GettingStarted />

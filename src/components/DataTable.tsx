@@ -9,6 +9,8 @@ export interface Column<T> {
   sortable?: boolean;
   className?: string;
   render: (row: T, index: number) => ReactNode;
+  /** Returns the raw value used for sorting. Falls back to stringifying column id. */
+  getValue?: (row: T) => string | number;
 }
 
 interface DataTableProps<T> {
@@ -40,10 +42,12 @@ export default function DataTable<T>({
     const col = columns.find((c) => c.id === sortCol);
     if (!col) return data;
     return [...data].sort((a, b) => {
-      // Simple string comparison for now
-      const aVal = String(sortCol);
-      const bVal = String(sortCol);
-      const cmp = aVal.localeCompare(bVal);
+      const aVal = col.getValue ? col.getValue(a) : String((a as Record<string, unknown>)[sortCol] ?? "");
+      const bVal = col.getValue ? col.getValue(b) : String((b as Record<string, unknown>)[sortCol] ?? "");
+      if (typeof aVal === "number" && typeof bVal === "number") {
+        return sortDir === "asc" ? aVal - bVal : bVal - aVal;
+      }
+      const cmp = String(aVal).localeCompare(String(bVal));
       return sortDir === "asc" ? cmp : -cmp;
     });
   }, [data, sortCol, sortDir, columns]);

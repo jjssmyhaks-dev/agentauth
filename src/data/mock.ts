@@ -23,6 +23,14 @@ export const mockAgents: Agent[] = [
   {
     id: "ag_01H8X9A1B2C3D4E5F6G7H8I9",
     name: "Code Review Bot",
+    sessionHistory: [
+      { id: "sh_001", startedAt: "2025-08-30T03:00:00Z", endedAt: "2025-08-30T04:15:00Z", tokensUsed: 47, actionsPerformed: 34, ipAddress: "10.0.1.15", userAgent: "AgentAuth-SDK/2.1" },
+      { id: "sh_002", startedAt: "2025-08-29T14:00:00Z", endedAt: "2025-08-29T16:30:00Z", tokensUsed: 128, actionsPerformed: 96, ipAddress: "10.0.1.15", userAgent: "AgentAuth-SDK/2.1" },
+      { id: "sh_003", startedAt: "2025-08-28T08:00:00Z", endedAt: "2025-08-28T12:00:00Z", tokensUsed: 234, actionsPerformed: 187, ipAddress: "10.0.1.15", userAgent: "AgentAuth-SDK/2.1" },
+    ],
+    keyRotationHistory: [
+      { id: "kr_001", rotatedAt: "2025-08-15T10:00:00Z", oldFingerprint: "SHA256:old1...f1a2", newFingerprint: "SHA256:7d3f...a1b2", reason: "Scheduled 30-day rotation", initiatedBy: "admin@acme.com" },
+    ],
     status: "active",
     approvalMode: "human-in-the-loop",
     publicKey: "ed25519_pk_A3F8...K9mQ",

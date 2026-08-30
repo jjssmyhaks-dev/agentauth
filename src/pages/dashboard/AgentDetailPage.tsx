@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
-import { ArrowLeft, Shield, Key, Activity, AlertTriangle, CheckCircle2, TrendingUp, TrendingDown, Minus } from "lucide-react";
+import { ArrowLeft, Shield, Key, Activity, AlertTriangle, CheckCircle2, TrendingUp, TrendingDown, Minus, Monitor, Clock, RefreshCw } from "lucide-react";
 import TrustGauge, { type TrustGaugeProps } from "@/components/TrustGauge";
 import Sparkline from "@/components/Sparkline";
 
@@ -43,7 +43,7 @@ export default function AgentDetailPage() {
       </Card>
 
       <Tabs defaultValue="overview" className="space-y-4">
-        <TabsList className="bg-muted border border-hairline"><TabsTrigger value="overview">Overview</TabsTrigger><TabsTrigger value="grants">Grants ({agentGrants.length})</TabsTrigger><TabsTrigger value="activity">Activity ({agentActivity.length})</TabsTrigger><TabsTrigger value="feedback">AI Feedback</TabsTrigger></TabsList>
+        <TabsList className="bg-muted border border-hairline"><TabsTrigger value="overview">Overview</TabsTrigger><TabsTrigger value="sessions">Sessions</TabsTrigger><TabsTrigger value="grants">Grants ({agentGrants.length})</TabsTrigger><TabsTrigger value="activity">Activity ({agentActivity.length})</TabsTrigger><TabsTrigger value="feedback">AI Feedback</TabsTrigger></TabsList>
 
         <TabsContent value="overview" className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-4">
@@ -56,6 +56,62 @@ export default function AgentDetailPage() {
               <div key={k as string} className="flex justify-between"><span className="text-sm text-muted-foreground">{k as string}</span><span className="font-mono text-xs">{v as string}</span></div>
             ))}
           </CardContent></Card>
+        </TabsContent>
+
+        <TabsContent value="sessions" className="space-y-4">
+          <div className="grid gap-4 lg:grid-cols-2">
+            {/* Session History */}
+            <Card className="border-hairline bg-surface/60"><CardHeader><CardTitle className="text-base">Recent Sessions</CardTitle></CardHeader><CardContent>
+              {agent.sessionHistory && agent.sessionHistory.length > 0 ? (
+                <div className="space-y-3">
+                  {agent.sessionHistory.map((s) => (
+                    <div key={s.id} className="rounded-xl border border-hairline bg-background/60 p-3">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <Monitor className="h-3.5 w-3.5 text-muted-foreground" />
+                          <span className="text-xs font-mono text-muted-foreground">{s.ipAddress}</span>
+                        </div>
+                        <Badge variant={s.endedAt ? "secondary" : "success"} className="text-xs">{s.endedAt ? "ended" : "active"}</Badge>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2 text-xs">
+                        <div><span className="text-muted-foreground">Tokens:</span> <span className="font-medium">{s.tokensUsed}</span></div>
+                        <div><span className="text-muted-foreground">Actions:</span> <span className="font-medium">{s.actionsPerformed}</span></div>
+                        <div className="text-muted-foreground">{new Date(s.startedAt).toLocaleTimeString()}</div>
+                      </div>
+                      <p className="text-[10px] text-muted-foreground mt-1 font-mono">{s.userAgent}</p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="py-8 text-center text-sm text-muted-foreground">No session history</p>
+              )}
+            </CardContent></Card>
+
+            {/* Key Rotation History */}
+            <Card className="border-hairline bg-surface/60"><CardHeader><CardTitle className="text-base">Key Rotation History</CardTitle></CardHeader><CardContent>
+              {agent.keyRotationHistory && agent.keyRotationHistory.length > 0 ? (
+                <div className="space-y-3">
+                  {agent.keyRotationHistory.map((kr) => (
+                    <div key={kr.id} className="rounded-xl border border-hairline bg-background/60 p-3">
+                      <div className="flex items-center gap-2 mb-2">
+                        <RefreshCw className="h-3.5 w-3.5 text-muted-foreground" />
+                        <span className="text-sm font-medium">Key Rotated</span>
+                      </div>
+                      <div className="space-y-1 text-xs">
+                        <div className="flex justify-between"><span className="text-muted-foreground">Date:</span><span>{new Date(kr.rotatedAt).toLocaleString()}</span></div>
+                        <div className="flex justify-between"><span className="text-muted-foreground">Reason:</span><span>{kr.reason}</span></div>
+                        <div className="flex justify-between"><span className="text-muted-foreground">Initiated by:</span><span>{kr.initiatedBy}</span></div>
+                        <div className="flex justify-between items-center"><span className="text-muted-foreground">Old key:</span><span className="font-mono text-[10px] text-muted-foreground">{kr.oldFingerprint}</span></div>
+                        <div className="flex justify-between items-center"><span className="text-muted-foreground">New key:</span><span className="font-mono text-[10px]">{kr.newFingerprint}</span></div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="py-8 text-center text-sm text-muted-foreground">No key rotations yet</p>
+              )}
+            </CardContent></Card>
+          </div>
         </TabsContent>
 
         <TabsContent value="grants" className="space-y-4">

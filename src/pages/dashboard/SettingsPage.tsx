@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
+import { useNotifications } from "@/context/NotificationContext";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -14,6 +15,19 @@ export default function SettingsPage() {
   const [org, setOrg] = useState(mockOrg);
   const [showDangerConfirm, setShowDangerConfirm] = useState(false);
   const [confirmText, setConfirmText] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const { pushToast } = useNotifications();
+
+  const handleSave = useCallback(() => {
+    setSaving(true);
+    setTimeout(() => {
+      setSaving(false);
+      setSaved(true);
+      pushToast({ type: "system", priority: "low", title: "Settings saved", message: "Your organization settings have been updated" });
+      setTimeout(() => setSaved(false), 2000);
+    }, 600);
+  }, [pushToast]);
 
   return (
     <div className="space-y-6 max-w-3xl">
@@ -24,7 +38,9 @@ export default function SettingsPage() {
         <CardContent className="space-y-4">
           <div className="space-y-2"><Label>Organization Name</Label><Input value={org.name} onChange={(e) => setOrg({ ...org, name: e.target.value })} className="rounded-xl border-hairline bg-background" /></div>
           <div className="space-y-2"><Label>Organization ID</Label><Input value={org.id} disabled className="rounded-xl border-hairline bg-muted text-muted-foreground font-mono text-sm" /></div>
-          <Button className="rounded-full bg-primary text-primary-foreground hover:opacity-90">Save Changes</Button>
+          <Button onClick={handleSave} disabled={saving} className="rounded-full bg-primary text-primary-foreground hover:opacity-90">
+            {saving ? "Saving..." : saved ? "Saved!" : "Save Changes"}
+          </Button>
         </CardContent>
       </Card>
 

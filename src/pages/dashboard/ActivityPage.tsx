@@ -29,12 +29,14 @@ export default function ActivityPage() {
       id: "timestamp",
       header: "Timestamp",
       sortable: true,
+      getValue: (e) => new Date(e.timestamp).getTime(),
       render: (e) => <span className="whitespace-nowrap text-xs text-muted-foreground">{new Date(e.timestamp).toLocaleString()}</span>,
     },
     {
       id: "actor",
       header: "Actor",
       sortable: true,
+      getValue: (e) => e.actor,
       render: (e) => (
         <div className="flex items-center gap-2">
           {e.actorType === "agent" ? <Bot className="h-3.5 w-3.5 text-blue-500" /> : e.actorType === "user" ? <User className="h-3.5 w-3.5 text-green-500" /> : <Key className="h-3.5 w-3.5 text-purple-500" />}
@@ -46,6 +48,7 @@ export default function ActivityPage() {
       id: "action",
       header: "Action",
       sortable: true,
+      getValue: (e) => e.action,
       render: (e) => <span className="text-muted-foreground">{e.action}</span>,
     },
     {
@@ -57,6 +60,7 @@ export default function ActivityPage() {
       id: "result",
       header: "Result",
       sortable: true,
+      getValue: (e) => e.result,
       render: (e) => (
         <Badge variant={e.result === "allowed" || e.result === "issued" ? "success" : e.result === "denied" || e.result === "revoked" ? "destructive" : "warning"}>
           {e.result}

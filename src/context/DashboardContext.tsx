@@ -23,6 +23,7 @@ interface DashboardContextType {
   totalActions: number;
   addAgent: (agent: Agent) => void;
   addGrant: (grant: Grant) => void;
+  addApproval: (approval: Approval) => void;
   approveRequest: (id: string) => void;
   denyRequest: (id: string, reason: string) => void;
   revokeAgent: (id: string) => void;
@@ -31,6 +32,9 @@ interface DashboardContextType {
   revokeApiKey: (id: string) => void;
   addWebhook: (wh: Webhook) => void;
   pauseWebhook: (id: string) => void;
+  addAuditEntry: (entry: AuditEntry) => void;
+  incrementAgentTokens: (agentId: string, delta?: number) => void;
+  incrementAgentActions: (agentId: string, allowed: boolean) => void;
 }
 
 const DashboardContext = createContext<DashboardContextType | null>(null);
@@ -112,13 +116,42 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
     );
   }, []);
 
+  const [auditLogState, setAuditLogState] = useState<AuditEntry[]>(mockAuditLog);
+
+  const addAuditEntry = useCallback((entry: AuditEntry) => {
+    setAuditLogState((prev) => [entry, ...prev].slice(0, 200));
+  }, []);
+
+  const addApproval = useCallback((approval: Approval) => {
+    setApprovals((prev) => [approval, ...prev]);
+  }, []);
+
+  const incrementAgentTokens = useCallback((agentId: string, delta = 1) => {
+    setAgents((prev) =>
+      prev.map((a) => (a.id === agentId ? { ...a, tokensIssued: a.tokensIssued + delta, lastActiveAt: new Date().toISOString() } : a))
+    );
+  }, []);
+
+  const incrementAgentActions = useCallback((agentId: string, allowed: boolean) => {
+    setAgents((prev) =>
+      prev.map((a) => (a.id === agentId ? {
+        ...a,
+        actionsTotal: a.actionsTotal + 1,
+        actionsAllowed: a.actionsAllowed + (allowed ? 1 : 0),
+        actionsDenied: a.actionsDenied + (allowed ? 0 : 1),
+        lastActiveAt: new Date().toISOString(),
+      } : a))
+    );
+  }, []);
+
   return (
     <DashboardContext.Provider
       value={{
-        agents, grants, approvals, auditLog, apiKeys, webhooks, agentStats,
+        agents, grants, approvals, auditLog: auditLogState, apiKeys, webhooks, agentStats,
         pendingApprovals, totalTokens, totalActions,
-        addAgent, addGrant, approveRequest, denyRequest, revokeAgent, revokeGrant,
-        addApiKey, revokeApiKey, addWebhook, pauseWebhook,
+        addAgent, addGrant, addApproval, approveRequest, denyRequest, revokeAgent, revokeGrant,
+        addApiKey, revokeApiKey, addWebhook, pauseWebhook, addAuditEntry,
+        incrementAgentTokens, incrementAgentActions,
       }}
     >
       {children}

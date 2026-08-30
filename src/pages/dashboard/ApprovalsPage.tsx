@@ -10,18 +10,31 @@ import { useNotifications } from "@/context/NotificationContext";
 import { CheckCircle2, XCircle, Clock } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
-function TimeAgo({ date }: { date: string }) {
+function TimeAgo({ date, slaMinutes = 60 }: { date: string; slaMinutes?: number }) {
   const [text, setText] = useState("");
+  const [elapsed, setElapsed] = useState(0);
   useEffect(() => {
     const update = () => {
-      const diff = Math.floor((Date.now() - new Date(date).getTime()) / 60000);
-      setText(diff < 1 ? "just now" : diff < 60 ? `waiting ${diff} min` : `${Math.floor(diff / 60)}h ${diff % 60}m`);
+      const diffMs = Date.now() - new Date(date).getTime();
+      const diffMin = Math.floor(diffMs / 60000);
+      setElapsed(diffMin);
+      setText(diffMin < 1 ? "just now" : diffMin < 60 ? `waiting ${diffMin}m` : `${Math.floor(diffMin / 60)}h ${diffMin % 60}m`);
     };
     update();
-    const i = setInterval(update, 30000);
+    const i = setInterval(update, 15000);
     return () => clearInterval(i);
   }, [date]);
-  return <span className="text-xs text-muted-foreground">{text}</span>;
+  const pct = Math.min((elapsed / slaMinutes) * 100, 100);
+  const isBreached = elapsed >= slaMinutes;
+  const isWarning = elapsed >= slaMinutes * 0.75 && !isBreached;
+  return (
+    <div className="flex items-center gap-2">
+      <span className={`text-xs ${isBreached ? "text-red-600 dark:text-red-400 font-medium" : isWarning ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground"}`}>{text}</span>
+      <div className="h-1.5 w-16 rounded-full bg-muted overflow-hidden">
+        <div className={`h-full rounded-full transition-all duration-500 ${isBreached ? "bg-red-500" : isWarning ? "bg-amber-500" : "bg-green-500"}`} style={{ width: `${pct}%` }} />
+      </div>
+    </div>
+  );
 }
 
 export default function ApprovalsPage() {

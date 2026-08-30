@@ -6,16 +6,6 @@ import { Sun, Moon } from "lucide-react";
 
 /* ── Content ─────────────────────────────────────────────────────────── */
 const c = {
-  nav: {
-    links: [
-      { label: "Product", href: "#product" },
-      { label: "Docs", href: "#docs" },
-      { label: "Pricing", href: "#pricing" },
-      { label: "Blog", href: "#" },
-    ],
-    signIn: { label: "Sign In", href: "/auth" },
-    cta: { label: "Get Started", href: "/auth" },
-  },
   hero: {
     eyebrow: "Identity & permissions for the agent era",
     title: "Auth built for agents, not humans.",
@@ -84,12 +74,20 @@ const c = {
     body: "Start free, integrate in minutes, and never wonder what your agents are doing again.",
     cta: { label: "Get Started Free", href: "/auth" },
   },
+  nav: {
+    links: [
+      { label: "Product", href: "/product" },
+      { label: "Docs", href: "/docs" },
+      { label: "Pricing", href: "/pricing" },
+      { label: "Blog", href: "/blog" },
+    ],
+  },
   footer: {
     columns: [
-      { title: "Product", links: [{ label: "Features", href: "#product" }, { label: "Pricing", href: "#pricing" }, { label: "Docs", href: "#docs" }, { label: "Changelog", href: "#" }] },
-      { title: "Developers", links: [{ label: "SDKs", href: "#docs" }, { label: "API Reference", href: "#docs" }, { label: "Status", href: "#" }] },
-      { title: "Company", links: [{ label: "About", href: "#" }, { label: "Blog", href: "#" }, { label: "Contact", href: "#" }] },
-      { title: "Legal", links: [{ label: "Privacy", href: "#" }, { label: "Terms", href: "#" }, { label: "Security", href: "#" }] },
+      { title: "Product", links: [{ label: "Features", href: "/features" }, { label: "Pricing", href: "/pricing" }, { label: "Docs", href: "/docs" }, { label: "Changelog", href: "/changelog" }] },
+      { title: "Developers", links: [{ label: "SDKs", href: "/sdks" }, { label: "API Reference", href: "/api-reference" }, { label: "Status", href: "/status" }] },
+      { title: "Company", links: [{ label: "About", href: "/about" }, { label: "Blog", href: "/blog" }, { label: "Contact", href: "/contact" }] },
+      { title: "Legal", links: [{ label: "Privacy", href: "/privacy" }, { label: "Terms", href: "/terms" }, { label: "Security", href: "/security" }] },
     ],
   },
 };
@@ -460,7 +458,7 @@ export default function LandingPage() {
         <div className="flex items-center justify-between gap-2 sm:gap-4">
           <nav className="hidden items-center gap-1 rounded-full bg-surface/60 px-3 py-1.5 shadow-[0_1px_2px_rgba(0,0,0,0.06)] backdrop-blur lg:flex">
             {c.nav.links.map((l) => (
-              <a key={l.label} href={l.href} className="rounded-full px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground">{l.label}</a>
+              <Link key={l.label} to={l.href} className="rounded-full px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground">{l.label}</Link>
             ))}
           </nav>
           <Link to="/" className="flex min-w-0 flex-1 items-center justify-center gap-2 rounded-full bg-surface/60 px-4 py-2 text-sm font-medium shadow-[0_1px_2px_rgba(0,0,0,0.06)] backdrop-blur sm:px-5 sm:py-2.5 lg:mx-auto lg:max-w-sm lg:flex-none lg:grow-0 lg:basis-96">
@@ -700,7 +698,7 @@ export default function LandingPage() {
               <div className="flex items-center gap-2 mb-5"><span className="inline-block h-2 w-2 rounded-full bg-foreground" /><span className="font-medium">AgentAuth</span></div>
               <p className="text-sm text-muted-foreground leading-relaxed">Identity and permissions infrastructure for AI agents.</p>
             </div>
-            {c.footer.columns.map((col) => (<div key={col.title}><div className="eyebrow">{col.title}</div><ul className="mt-5 space-y-2.5 text-sm">{col.links.map((l) => (<li key={l.label}><a href={l.href} className="text-muted-foreground transition-colors hover:text-foreground">{l.label}</a></li>))}</ul></div>))}
+            {c.footer.columns.map((col) => (<div key={col.title}><div className="eyebrow">{col.title}</div><ul className="mt-5 space-y-2.5 text-sm">{col.links.map((l) => (<li key={l.label}><Link to={l.href} className="text-muted-foreground transition-colors hover:text-foreground">{l.label}</Link></li>))}</ul></div>))}
           </div>
           <div className="mt-12 flex flex-wrap items-center justify-between gap-3 rule-x pt-6 sm:mt-16 sm:gap-4 text-xs text-muted-foreground">
             <span>© 2025 AgentAuth. All rights reserved.</span>

@@ -31,6 +31,7 @@ export default function AgentsPage() {
       id: "name",
       header: "Agent",
       sortable: true,
+      getValue: (a) => a.name,
       render: (agent) => (
         <div className="flex items-center gap-3">
           <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-muted"><Shield className="h-4 w-4" /></div>
@@ -45,6 +46,7 @@ export default function AgentsPage() {
       id: "status",
       header: "Status",
       sortable: true,
+      getValue: (a) => a.status,
       render: (agent) => (
         <Badge variant={agent.status === "active" ? "success" : agent.status === "revoked" ? "destructive" : "warning"}>{agent.status}</Badge>
       ),
@@ -53,20 +55,30 @@ export default function AgentsPage() {
       id: "approvalMode",
       header: "Approval Mode",
       sortable: true,
+      getValue: (a) => a.approvalMode,
       render: (agent) => (
         <Badge variant={agent.approvalMode === "autonomous" ? "info" : "secondary"}>{agent.approvalMode === "autonomous" ? "Autonomous" : "HITL"}</Badge>
       ),
     },
     {
+      id: "trustScore",
+      header: "Trust",
+      sortable: true,
+      getValue: (a) => a.trustScore,
+      render: (agent) => <span className="text-xs text-muted-foreground">{agent.trustScore}</span>,
+    },
+    {
       id: "createdAt",
       header: "Created",
       sortable: true,
+      getValue: (a) => new Date(a.createdAt).getTime(),
       render: (agent) => <span className="text-xs text-muted-foreground">{new Date(agent.createdAt).toLocaleDateString()}</span>,
     },
     {
       id: "lastActiveAt",
       header: "Last Active",
       sortable: true,
+      getValue: (a) => new Date(a.lastActiveAt).getTime(),
       render: (agent) => <span className="text-xs text-muted-foreground">{new Date(agent.lastActiveAt).toLocaleDateString()}</span>,
     },
     {

@@ -12,6 +12,7 @@ import { useDashboard } from "@/context/DashboardContext";
 import { useNotifications } from "@/context/NotificationContext";
 import { useTheme } from "@/context/ThemeContext";
 import { useNotificationSimulator } from "@/hooks/useNotificationSimulator";
+import { useRealtime } from "@/hooks/useRealtime";
 import NotificationPanel from "@/components/NotificationPanel";
 import ToastContainer from "@/components/ToastContainer";
 import CommandPalette from "@/components/CommandPalette";
@@ -53,6 +54,7 @@ export default function DashboardLayout() {
   const bellRef = useRef<HTMLButtonElement>(null);
 
   useNotificationSimulator(15000);
+  useRealtime();
 
   const handleOnboardingComplete = () => {
     localStorage.setItem("aa_onboarding_complete", "true");

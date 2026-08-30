@@ -1,501 +1,601 @@
 import { Link } from "react-router-dom";
-import { motion } from "framer-motion";
-import {
-  Shield, Key, Eye, CheckCircle2, ArrowRight, Zap, Lock, Activity,
-  Terminal, Users, FileCode2, Bell, ChevronRight, Copy, Check,
-} from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { useState } from "react";
+import { useEffect, useState, useRef, type ReactNode } from "react";
+import { motion, useInView, useScroll, useTransform, AnimatePresence } from "framer-motion";
 
-const fadeUp = { hidden: { opacity: 0, y: 30 }, visible: { opacity: 1, y: 0 } };
-const stagger = { visible: { transition: { staggerChildren: 0.1 } } };
+/* ── Content ─────────────────────────────────────────────────────────── */
+const c = {
+  nav: {
+    links: [
+      { label: "Product", href: "#product" },
+      { label: "Docs", href: "#docs" },
+      { label: "Pricing", href: "#pricing" },
+      { label: "Blog", href: "#" },
+    ],
+    signIn: { label: "Sign In", href: "/auth" },
+    cta: { label: "Get Started", href: "/auth" },
+  },
+  hero: {
+    eyebrow: "Identity & permissions for the agent era",
+    title: "Auth built for agents, not humans.",
+    body: "Give every AI agent a verifiable identity, scope exactly what it can touch, and decide — per agent, per action — whether it runs autonomously or waits for your approval.",
+    primaryCta: { label: "Start Building", href: "/auth" },
+    secondaryCta: { label: "View Docs", href: "#docs" },
+    supporting: "Free to start. No credit card required.",
+  },
+  problem: {
+    heading: "Your agents are doing more. Your auth stack wasn't built for that.",
+    body: "Traditional auth systems assume a human typing a password into a browser. Agents don't log in — they act, continuously, often without anyone watching. Bolting human-auth tools onto agent workflows leaves gaps: no durable agent identity, no fine-grained control over what an agent can touch, and no clean way to say \"let this run on its own\" versus \"check with me first.\"",
+    cards: [
+      { title: "No real agent identity", body: "API keys get shared, copied, and forgotten. There's no durable, verifiable fingerprint per agent." },
+      { title: "All-or-nothing access", body: "Coarse roles don't match how agents actually work. One agent, one resource, one action — that's the level of control you need." },
+      { title: "No visibility until something breaks", body: "Without an audit trail, you find out what an agent did after the damage, not before." },
+    ],
+  },
+  howItWorks: {
+    heading: "One layer. Full control.",
+    steps: [
+      { num: "01", title: "Identity", body: "Every agent gets a persistent cryptographic identity at creation — a key pair that's its permanent fingerprint. Short-lived signed tokens are issued from that identity for every call, so a leaked token expires in minutes, not forever." },
+      { num: "02", title: "Permissions", body: "Grant access down to the resource and the action: this agent can read this dataset, not write to it, not touch anything else. Time-boxed, usage-capped, revocable instantly." },
+      { num: "03", title: "Approval", body: "Choose per agent, per user, or per action type whether it runs fully autonomous or waits for a human to approve. Deletes always need a nod. Reads can run free. You decide." },
+      { num: "04", title: "Audit", body: "Every token issued, every permission check, every approval decision — logged in a tamper-evident trail you can export, filter, and verify." },
+    ],
+  },
+  features: {
+    heading: "Everything your agents need to act safely",
+    items: [
+      { title: "Cryptographic agent identity", body: "Ed25519 key pairs, not shared secrets." },
+      { title: "Granular scoped permissions", body: "Resource + action level, not roles." },
+      { title: "Configurable approval modes", body: "Autonomous or human-in-the-loop, your call." },
+      { title: "Tamper-evident audit log", body: "Hash-chained, exportable, verifiable." },
+      { title: "Instant revocation", body: "Cut off an agent's access the moment you need to." },
+      { title: "Developer-first SDKs", body: "TypeScript and Python, drop-in integration." },
+      { title: "Live ops dashboard", body: "See what your agents are doing, right now." },
+      { title: "Webhooks", body: "Get notified the moment an approval is decided." },
+    ],
+  },
+  whoItsFor: {
+    heading: "Built for teams shipping real agent products",
+    cards: [
+      { tag: "Coding Agent Platforms", title: "Ship code safely.", body: "Your agents touch repos, run commands, and ship code. Scope exactly what they can do, and require approval before anything destructive." },
+      { tag: "AI SDR & Ops Agents", title: "Automate with guardrails.", body: "Agents sending emails, updating CRMs, and taking actions on behalf of your customers. Give each one a verifiable identity and a clean audit trail." },
+      { tag: "Regulated Industries", title: "Built for compliance.", body: "Compliance teams need proof of what an agent did and under whose authority. AgentAuth's audit trail is built for exactly that conversation." },
+    ],
+  },
+  codeSample: {
+    heading: "A few lines to get started",
+    code: `client = AgentAuthClient(agent_id, private_key)\ntoken = client.get_token()\nresult = client.submit_action(\n    "database", "customers_table", "write", payload\n)\n# Autonomous or pending approval — handled for you.`,
+    caption: "TypeScript and Python SDKs.",
+  },
+  socialProof: {
+    heading: "Trusted by teams building the next generation of agents",
+  },
+  pricing: {
+    heading: "Start free. Scale as your agents do.",
+    plans: [
+      { name: "Developer", price: "Free", period: "", features: ["Up to 3 agents", "Community support", "Core identity & permissions API"], cta: "Start free" },
+      { name: "Team", price: "$49", period: "/agent/mo", features: ["Unlimited agents", "Approval workflows", "Dashboard & webhooks", "Email support"], cta: "Start trial", highlighted: true },
+      { name: "Enterprise", price: "Custom", period: "", features: ["SSO", "Dedicated audit retention", "Custom SLAs", "Priority support"], cta: "Contact sales" },
+    ],
+  },
+  finalCta: {
+    heading: "Give your agents an identity they can prove.",
+    body: "Start free, integrate in minutes, and never wonder what your agents are doing again.",
+    cta: { label: "Get Started Free", href: "/auth" },
+  },
+  footer: {
+    columns: [
+      { title: "Product", links: [{ label: "Features", href: "#product" }, { label: "Pricing", href: "#pricing" }, { label: "Docs", href: "#docs" }, { label: "Changelog", href: "#" }] },
+      { title: "Developers", links: [{ label: "SDKs", href: "#docs" }, { label: "API Reference", href: "#docs" }, { label: "Status", href: "#" }] },
+      { title: "Company", links: [{ label: "About", href: "#" }, { label: "Blog", href: "#" }, { label: "Contact", href: "#" }] },
+      { title: "Legal", links: [{ label: "Privacy", href: "#" }, { label: "Terms", href: "#" }, { label: "Security", href: "#" }] },
+    ],
+  },
+};
 
-function Nav() {
+/* ── Reusable animation wrappers ────────────────────────────────────── */
+function FadeIn({ children, className = "", delay = 0, y = 24 }: { children: ReactNode; className?: string; delay?: number; y?: number }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const isInView = useInView(ref, { once: true, margin: "-60px" });
   return (
-    <motion.nav
-      initial={{ opacity: 0, y: -20 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="fixed top-0 left-0 right-0 z-50 border-b border-white/10 bg-slate-950/80 backdrop-blur-xl"
+    <motion.div
+      ref={ref}
+      initial={{ opacity: 0, y }}
+      animate={isInView ? { opacity: 1, y: 0 } : { opacity: 0, y }}
+      transition={{ duration: 0.6, delay, ease: [0.22, 1, 0.36, 1] }}
+      className={className}
     >
-      <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-6">
-        <Link to="/" className="flex items-center gap-2.5">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600">
-            <Shield className="h-4.5 w-4.5 text-white" />
-          </div>
-          <span className="text-lg font-bold text-white">AgentAuth</span>
-        </Link>
-        <div className="hidden items-center gap-8 md:flex">
-          {["Product", "Docs", "Pricing", "Blog"].map((item) => (
-            <a key={item} href="#" className="text-sm text-slate-400 transition-colors hover:text-white">
-              {item}
-            </a>
-          ))}
-        </div>
-        <div className="flex items-center gap-3">
-          <Link to="/auth">
-            <Button variant="ghost" className="text-slate-300 hover:text-white hover:bg-white/10">
-              Sign In
-            </Button>
-          </Link>
-          <Link to="/auth">
-            <Button className="bg-blue-600 text-white hover:bg-blue-700 shadow-lg shadow-blue-600/25">
-              Get Started
-            </Button>
-          </Link>
-        </div>
-      </div>
-    </motion.nav>
+      {children}
+    </motion.div>
   );
 }
 
-function HeroSection() {
+function StaggerContainer({ children, className = "" }: { children: ReactNode; className?: string }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const isInView = useInView(ref, { once: true, margin: "-40px" });
   return (
-    <section className="relative overflow-hidden pt-32 pb-20">
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_50%_at_50%_-20%,rgba(59,130,246,0.15),transparent)]" />
-      <div className="absolute left-1/2 top-0 h-[500px] w-[800px] -translate-x-1/2 bg-blue-600/10 blur-[120px]" />
-
-      <div className="relative mx-auto max-w-7xl px-6">
-        <motion.div
-          initial="hidden"
-          animate="visible"
-          variants={stagger}
-          className="mx-auto max-w-3xl text-center"
-        >
-          <motion.div variants={fadeUp}>
-            <Badge variant="info" className="mb-6 px-4 py-1.5 text-xs">
-              IDENTITY & PERMISSIONS FOR THE AGENT ERA
-            </Badge>
-          </motion.div>
-
-          <motion.h1
-            variants={fadeUp}
-            className="text-5xl font-bold tracking-tight text-white sm:text-6xl lg:text-7xl"
-          >
-            Auth built for agents,{" "}
-            <span className="bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">
-              not humans.
-            </span>
-          </motion.h1>
-
-          <motion.p variants={fadeUp} className="mt-6 text-lg text-slate-400 sm:text-xl">
-            Give every AI agent a verifiable identity, scope exactly what it can touch,
-            and decide — per agent, per action — whether it runs autonomously or waits for your approval.
-          </motion.p>
-
-          <motion.div variants={fadeUp} className="mt-10 flex items-center justify-center gap-4">
-            <Link to="/auth">
-              <Button size="lg" className="bg-blue-600 text-white hover:bg-blue-700 shadow-lg shadow-blue-600/25 px-8 text-base">
-                Start Building <ArrowRight className="ml-2 h-4 w-4" />
-              </Button>
-            </Link>
-            <Button size="lg" variant="outline" className="border-slate-700 text-slate-300 hover:bg-slate-800 hover:text-white px-8 text-base">
-              View Docs
-            </Button>
-          </motion.div>
-
-          <motion.p variants={fadeUp} className="mt-4 text-sm text-slate-500">
-            Free to start. No credit card required.
-          </motion.p>
-        </motion.div>
-
-        {/* Hero visual — animated auth flow diagram */}
-        <motion.div
-          initial={{ opacity: 0, y: 40 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.6, duration: 0.8 }}
-          className="mx-auto mt-20 max-w-4xl"
-        >
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-8 backdrop-blur-xl">
-            <div className="flex items-center gap-2 mb-6">
-              <div className="h-3 w-3 rounded-full bg-red-500/80" />
-              <div className="h-3 w-3 rounded-full bg-yellow-500/80" />
-              <div className="h-3 w-3 rounded-full bg-green-500/80" />
-              <span className="ml-3 text-xs text-slate-500">agent-auth-flow.ts</span>
-            </div>
-            <div className="grid grid-cols-3 gap-6">
-              {[
-                { icon: Key, label: "Identity", desc: "Agent signs challenge with Ed25519 key", color: "from-blue-500 to-blue-600" },
-                { icon: Shield, label: "Permissions", desc: "Check scoped grants for resource + action", color: "from-cyan-500 to-blue-500" },
-                { icon: CheckCircle2, label: "Approval", desc: "Autonomous or human-in-the-loop decision", color: "from-emerald-500 to-cyan-500" },
-              ].map((step, i) => (
-                <motion.div
-                  key={step.label}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.8 + i * 0.2 }}
-                  className="relative text-center"
-                >
-                  <div className={`mx-auto flex h-14 w-14 items-center justify-center rounded-xl bg-gradient-to-br ${step.color} shadow-lg`}>
-                    <step.icon className="h-7 w-7 text-white" />
-                  </div>
-                  <h3 className="mt-4 text-sm font-semibold text-white">{step.label}</h3>
-                  <p className="mt-1 text-xs text-slate-400">{step.desc}</p>
-                  {i < 2 && (
-                    <ChevronRight className="absolute right-[-16px] top-5 h-5 w-5 text-slate-600" />
-                  )}
-                </motion.div>
-              ))}
-            </div>
-          </div>
-        </motion.div>
-      </div>
-    </section>
+    <motion.div
+      ref={ref}
+      initial="hidden"
+      animate={isInView ? "visible" : "hidden"}
+      variants={{ hidden: {}, visible: { transition: { staggerChildren: 0.08 } } }}
+      className={className}
+    >
+      {children}
+    </motion.div>
   );
 }
 
-function ProblemSection() {
-  const problems = [
-    { icon: Key, title: "No real agent identity", desc: "API keys get shared, copied, and forgotten. There's no durable, verifiable fingerprint per agent." },
-    { icon: Lock, title: "All-or-nothing access", desc: "Coarse roles don't match how agents actually work. One agent, one resource, one action — that's the control you need." },
-    { icon: Eye, title: "No visibility until something breaks", desc: "Without an audit trail, you find out what an agent did after the damage, not before." },
-  ];
+const staggerItem = {
+  hidden: { opacity: 0, y: 20 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: [0.22, 1, 0.36, 1] as const } },
+};
 
+/* ── Helpers ─────────────────────────────────────────────────────────── */
+function SectionLabel({ n, children }: { n: string; children: string }) {
+  return <div className="flex items-center gap-3 eyebrow"><span className="tabular-nums">{n}</span><span>{children}</span></div>;
+}
+
+/* ── Live activity feed (real-time) ──────────────────────────────────── */
+const feedData = [
+  { agent: "Code Review Bot", action: "read", resource: "acme-corp/api-gateway", result: "allowed" },
+  { agent: "SDR Outreach Agent", action: "write", resource: "crm/contacts/active", result: "allowed" },
+  { agent: "Database Migration Agent", action: "delete", resource: "production/main", result: "pending" },
+  { agent: "Customer Support Bot", action: "read", resource: "knowledge_base/faq", result: "allowed" },
+  { agent: "Data Pipeline Agent", action: "write", resource: "analytics/warehouse", result: "pending" },
+  { agent: "Security Scanner", action: "read", resource: "acme-corp/*", result: "denied" },
+];
+
+function ActivityFeed() {
+  const [items, setItems] = useState(feedData.slice(0, 3));
+  const idx = useRef(3);
+  useEffect(() => {
+    const i = setInterval(() => {
+      setItems((prev) => [feedData[idx.current % feedData.length], ...prev].slice(0, 4));
+      idx.current++;
+    }, 3000);
+    return () => clearInterval(i);
+  }, []);
   return (
-    <section className="relative py-24">
-      <div className="mx-auto max-w-7xl px-6">
-        <motion.div
-          initial="hidden"
-          whileInView="visible"
-          viewport={{ once: true, margin: "-100px" }}
-          variants={stagger}
-          className="text-center"
-        >
-          <motion.h2 variants={fadeUp} className="text-3xl font-bold text-white sm:text-4xl">
-            Your agents are doing more.
-            <br />
-            <span className="text-slate-400">Your auth stack wasn't built for that.</span>
-          </motion.h2>
-          <motion.p variants={fadeUp} className="mx-auto mt-4 max-w-2xl text-slate-400">
-            Traditional auth systems assume a human typing a password into a browser. Agents don't log in — they act, continuously, often without anyone watching.
-          </motion.p>
-        </motion.div>
-
-        <motion.div
-          initial="hidden"
-          whileInView="visible"
-          viewport={{ once: true, margin: "-100px" }}
-          variants={stagger}
-          className="mt-16 grid gap-6 md:grid-cols-3"
-        >
-          {problems.map((p) => (
+    <div className="rounded-2xl border border-hairline bg-surface/60 p-5 sm:p-6 backdrop-blur-sm">
+      <div className="flex items-center gap-2 mb-4"><span className="inline-block h-2 w-2 rounded-full bg-green-500 animate-pulse" /><span className="eyebrow">Live activity</span></div>
+      <div className="space-y-2">
+        <AnimatePresence mode="popLayout">
+          {items.map((item, i) => (
             <motion.div
-              key={p.title}
-              variants={fadeUp}
-              className="group rounded-xl border border-slate-800 bg-slate-900/50 p-6 transition-colors hover:border-slate-700 hover:bg-slate-800/50"
+              key={`${item.agent}-${i}-${idx.current}`}
+              layout
+              initial={{ opacity: 0, y: -12, scale: 0.98 }}
+              animate={{ opacity: 1 - i * 0.15, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 8, scale: 0.98 }}
+              transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+              className="flex items-center gap-3 rounded-xl bg-background/60 px-4 py-3 text-sm"
             >
-              <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-red-500/10 text-red-400 group-hover:bg-red-500/20">
-                <p.icon className="h-6 w-6" />
-              </div>
-              <h3 className="mt-4 text-lg font-semibold text-white">{p.title}</h3>
-              <p className="mt-2 text-sm text-slate-400">{p.desc}</p>
+              <span className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${item.result === "allowed" ? "bg-green-500" : item.result === "pending" ? "bg-amber-500" : "bg-red-500"}`} />
+              <span className="truncate"><span className="font-medium">{item.agent}</span> <span className="text-muted-foreground">{item.action}</span> <span className="text-muted-foreground font-mono text-xs">{item.resource}</span></span>
+              <span className={`ml-auto shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${item.result === "allowed" ? "bg-green-100 text-green-700" : item.result === "pending" ? "bg-amber-100 text-amber-700" : "bg-red-100 text-red-700"}`}>{item.result}</span>
             </motion.div>
           ))}
-        </motion.div>
+        </AnimatePresence>
       </div>
-    </section>
+    </div>
   );
 }
 
-function HowItWorksSection() {
-  const steps = [
-    { num: "01", title: "Identity", desc: "Every agent gets a persistent cryptographic identity at creation — a key pair that's its permanent fingerprint. Short-lived signed tokens are issued from that identity for every call, so a leaked token expires in minutes, not forever.", icon: Key },
-    { num: "02", title: "Permissions", desc: "Grant access down to the resource and the action: this agent can read this dataset, not write to it, not touch anything else. Time-boxed, usage-capped, revocable instantly.", icon: Shield },
-    { num: "03", title: "Approval", desc: "Choose per agent, per user, or per action type whether it runs fully autonomous or waits for a human to approve. Deletes always need a nod. Reads can run free. You decide.", icon: CheckCircle2 },
-    { num: "04", title: "Audit", desc: "Every token issued, every permission check, every approval decision — logged in a tamper-evident trail you can export, filter, and verify.", icon: Activity },
-  ];
+/* ── Animated counters ───────────────────────────────────────────────── */
+function Counter({ target, label }: { target: number; label: string }) {
+  const [count, setCount] = useState(0);
+  const ref = useRef<HTMLDivElement>(null);
+  const [visible, setVisible] = useState(false);
+  useEffect(() => {
+    const obs = new IntersectionObserver(([e]) => { if (e.isIntersecting) setVisible(true); }, { threshold: 0.3 });
+    if (ref.current) obs.observe(ref.current);
+    return () => obs.disconnect();
+  }, []);
+  useEffect(() => {
+    if (!visible) return;
+    let start = 0;
+    const step = (ts: number) => { if (!start) start = ts; const p = Math.min((ts - start) / 1200, 1); setCount(Math.floor(p * target)); if (p < 1) requestAnimationFrame(step); };
+    requestAnimationFrame(step);
+  }, [visible, target]);
+  return <div ref={ref} className="text-center"><div className="text-3xl sm:text-4xl font-serif tabular-nums">{count.toLocaleString()}</div><div className="mt-1 text-xs text-muted-foreground">{label}</div></div>;
+}
 
+/* ── Animated auth flow diagram ──────────────────────────────────────── */
+const flowNodes = [
+  { label: "Agent", sub: "requests token", icon: "⟐" },
+  { label: "Auth Engine", sub: "checks grants", icon: "◈" },
+  { label: "Approval", sub: "autonomous / HITL", icon: "◉" },
+];
+
+interface FlowNodeData { label: string; sub: string; icon: string; }
+
+function FlowNode({ node, active, index }: { node: FlowNodeData; active: boolean; index: number }) {
   return (
-    <section className="relative py-24 bg-slate-950">
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_40%_at_50%_50%,rgba(59,130,246,0.08),transparent)]" />
-      <div className="relative mx-auto max-w-7xl px-6">
-        <motion.div
-          initial="hidden"
-          whileInView="visible"
-          viewport={{ once: true, margin: "-100px" }}
-          variants={stagger}
-          className="text-center"
+    <motion.div
+      className="relative flex flex-col items-center"
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.6, delay: 0.4 + index * 0.15, ease: [0.22, 1, 0.36, 1] }}
+    >
+      {/* Glow */}
+      <motion.div
+        className="absolute -inset-3 rounded-3xl bg-foreground pointer-events-none"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: active ? 0.05 : 0 }}
+        transition={{ duration: 0.5 }}
+      />
+      {/* Card */}
+      <motion.div
+        className="relative flex h-20 w-28 flex-col items-center justify-center gap-1.5 rounded-2xl border border-hairline sm:h-24 sm:w-32"
+        animate={{
+          backgroundColor: active ? "var(--foreground)" : "var(--surface)",
+          borderColor: active ? "var(--foreground)" : "var(--hairline)",
+          scale: active ? 1.05 : 1,
+        }}
+        transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+      >
+        <motion.span
+          className="text-sm sm:text-base"
+          animate={{ color: active ? "var(--primary-foreground)" : "var(--muted-foreground)" }}
+          transition={{ duration: 0.4 }}
         >
-          <motion.h2 variants={fadeUp} className="text-3xl font-bold text-white sm:text-4xl">
-            One layer. Full control.
-          </motion.h2>
-        </motion.div>
-
-        <motion.div
-          initial="hidden"
-          whileInView="visible"
-          viewport={{ once: true, margin: "-100px" }}
-          variants={stagger}
-          className="mt-16 grid gap-8 md:grid-cols-2"
+          {node.icon}
+        </motion.span>
+        <motion.span
+          className="font-medium text-xs sm:text-sm"
+          animate={{ color: active ? "var(--primary-foreground)" : "var(--foreground)" }}
+          transition={{ duration: 0.4 }}
         >
-          {steps.map((step) => (
-            <motion.div
-              key={step.num}
-              variants={fadeUp}
-              className="group relative rounded-xl border border-slate-800 bg-slate-900/60 p-8 backdrop-blur-sm transition-all hover:border-blue-500/30 hover:bg-slate-800/60"
-            >
-              <div className="flex items-start gap-5">
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-blue-600/10 text-blue-400 group-hover:bg-blue-600/20">
-                  <step.icon className="h-6 w-6" />
-                </div>
-                <div>
-                  <div className="flex items-center gap-3">
-                    <span className="text-xs font-bold text-blue-400">{step.num}</span>
-                    <h3 className="text-lg font-semibold text-white">{step.title}</h3>
-                  </div>
-                  <p className="mt-2 text-sm leading-relaxed text-slate-400">{step.desc}</p>
-                </div>
-              </div>
-            </motion.div>
-          ))}
-        </motion.div>
-      </div>
-    </section>
+          {node.label}
+        </motion.span>
+        <motion.span
+          className="text-[9px] sm:text-[10px] leading-tight text-center px-1"
+          animate={{ color: active ? "var(--primary-foreground)" : "var(--muted-foreground)" }}
+          transition={{ duration: 0.4 }}
+        >
+          {node.sub}
+        </motion.span>
+      </motion.div>
+    </motion.div>
   );
 }
 
-function FeaturesGrid() {
-  const features = [
-    { icon: Key, title: "Cryptographic agent identity", desc: "Ed25519 key pairs, not shared secrets." },
-    { icon: Shield, title: "Granular scoped permissions", desc: "Resource + action level, not roles." },
-    { icon: CheckCircle2, title: "Configurable approval modes", desc: "Autonomous or human-in-the-loop." },
-    { icon: Activity, title: "Tamper-evident audit log", desc: "Hash-chained, exportable, verifiable." },
-    { icon: Zap, title: "Instant revocation", desc: "Cut off access the moment you need to." },
-    { icon: Terminal, title: "Developer-first SDKs", desc: "TypeScript and Python, drop-in." },
-    { icon: Users, title: "Live ops dashboard", desc: "See what agents are doing, right now." },
-    { icon: Bell, title: "Webhooks", desc: "Notified the moment an approval is decided." },
-  ];
-
+function FlowConnector({ active, index }: { active: boolean; index: number }) {
   return (
-    <section className="py-24">
-      <div className="mx-auto max-w-7xl px-6">
+    <div className="flex flex-1 items-center justify-center">
+      <div className="relative h-px w-full max-w-12 sm:max-w-20">
+        {/* Base line */}
+        <div className="absolute inset-0 bg-hairline" />
+        {/* Animated fill */}
         <motion.div
-          initial="hidden"
-          whileInView="visible"
-          viewport={{ once: true, margin: "-100px" }}
-          variants={stagger}
-          className="text-center"
-        >
-          <motion.h2 variants={fadeUp} className="text-3xl font-bold text-white sm:text-4xl">
-            Everything your agents need to act safely
-          </motion.h2>
-        </motion.div>
-
-        <motion.div
-          initial="hidden"
-          whileInView="visible"
-          viewport={{ once: true, margin: "-100px" }}
-          variants={stagger}
-          className="mt-16 grid gap-4 sm:grid-cols-2 lg:grid-cols-4"
-        >
-          {features.map((f) => (
-            <motion.div
-              key={f.title}
-              variants={fadeUp}
-              className="group rounded-xl border border-slate-800 bg-slate-900/40 p-5 transition-all hover:border-slate-700 hover:bg-slate-800/50"
-            >
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-600/10 text-blue-400 group-hover:bg-blue-600/20">
-                <f.icon className="h-5 w-5" />
-              </div>
-              <h3 className="mt-3 text-sm font-semibold text-white">{f.title}</h3>
-              <p className="mt-1 text-xs text-slate-400">{f.desc}</p>
-            </motion.div>
-          ))}
-        </motion.div>
-      </div>
-    </section>
-  );
-}
-
-function CodeExample() {
-  const [copied, setCopied] = useState(false);
-  const code = `import { AgentAuth } from 'agentauth-sdk';
-
-const client = new AgentAuth({
-  agentId: 'ag_01H8X9...',
-  privateKey: readFileSync('agent_key.pem', 'utf8'),
-  apiUrl: 'https://api.agentauth.com',
-});
-
-// Get a short-lived token
-const token = await client.getToken();
-
-// Submit an action — autonomous or pending approval
-const result = await client.submitAction({
-  resourceType: 'database',
-  resource: 'customers_table',
-  action: 'write',
-  payload: { name: 'Acme Corp' },
-});`;
-
-  const handleCopy = () => {
-    navigator.clipboard.writeText(code);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  return (
-    <section className="py-24 bg-slate-950">
-      <div className="mx-auto max-w-7xl px-6">
-        <motion.div
-          initial="hidden"
-          whileInView="visible"
-          viewport={{ once: true, margin: "-100px" }}
-          variants={stagger}
-        >
-          <motion.h2 variants={fadeUp} className="text-center text-3xl font-bold text-white sm:text-4xl">
-            Integrate in minutes
-          </motion.h2>
-          <motion.p variants={fadeUp} className="mx-auto mt-4 max-w-xl text-center text-slate-400">
-            Drop the SDK into your agent runtime. Get a token, check permissions, submit actions.
-          </motion.p>
-
+          className="absolute inset-y-0 left-0 bg-foreground/40"
+          initial={{ width: "0%" }}
+          animate={{ width: active ? "100%" : "0%" }}
+          transition={{ duration: 0.6, delay: active ? 0.1 : 0, ease: [0.22, 1, 0.36, 1] }}
+        />
+        {/* Traveling dot */}
+        {active && (
           <motion.div
-            variants={fadeUp}
-            className="mx-auto mt-12 max-w-3xl overflow-hidden rounded-xl border border-slate-800 bg-slate-900/80 backdrop-blur-xl"
+            className="absolute top-1/2 -translate-y-1/2 h-1.5 w-1.5 rounded-full bg-foreground"
+            initial={{ left: "0%" }}
+            animate={{ left: ["0%", "100%"] }}
+            transition={{ duration: 1.2, repeat: Infinity, ease: "easeInOut" }}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+function AuthFlowDiagram() {
+  const [step, setStep] = useState(0);
+  useEffect(() => { const i = setInterval(() => setStep((s) => (s + 1) % 3), 2800); return () => clearInterval(i); }, []);
+
+  return (
+    <div className="flex flex-col items-center gap-8">
+      {/* Flow row */}
+      <div className="flex w-full items-center justify-center gap-0">
+        {flowNodes.map((node, i) => (
+          <div key={node.label} className="flex items-center">
+            <FlowNode node={node} active={step === i} index={i} />
+            {i < flowNodes.length - 1 && <FlowConnector active={step >= i} index={i} />}
+          </div>
+        ))}
+      </div>
+      {/* Step indicators */}
+      <div className="flex items-center gap-2">
+        {[0, 1, 2].map((i) => (
+          <motion.div
+            key={i}
+            className="rounded-full"
+            animate={{
+              width: step === i ? 20 : 6,
+              height: 6,
+              backgroundColor: step === i ? "var(--foreground)" : "var(--hairline)",
+            }}
+            transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ── FAQ ─────────────────────────────────────────────────────────────── */
+const faqItems = [
+  { q: "How does agent identity work?", a: "Every agent gets an Ed25519 key pair at creation. The public key is registered with AgentAuth; the private key stays with the agent. Short-lived JWT tokens are derived from that identity for all API calls." },
+  { q: "What happens when a token is compromised?", a: "Tokens expire in 5-15 minutes by default. If a key is compromised, revoke the agent instantly — all future token issuance is blocked immediately." },
+  { q: "Can I mix autonomous and HITL modes?", a: "Yes. Set the mode per agent, per org, or per action type. Reads can run autonomously while writes require human approval." },
+  { q: "How does the audit trail work?", a: "Every token issuance, permission check, approval decision, and agent action is logged. Each entry is hash-chained to the previous one for tamper evidence." },
+  { q: "Is there a free tier?", a: "Yes. The Developer tier is free forever with up to 3 agents and core identity & permissions API. No credit card required." },
+];
+
+function FAQItem({ item }: { item: { q: string; a: string } }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="border-t border-dashed border-hairline py-6 first:border-t-0">
+      <button
+        onClick={() => setOpen(!open)}
+        className="flex w-full cursor-pointer items-center justify-between gap-6 text-left text-base sm:text-lg"
+      >
+        <span>{item.q}</span>
+        <motion.span
+          animate={{ rotate: open ? 45 : 0 }}
+          transition={{ duration: 0.2 }}
+          className="shrink-0 text-muted-foreground text-xl leading-none"
+        >
+          +
+        </motion.span>
+      </button>
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+            className="overflow-hidden"
           >
-            <div className="flex items-center justify-between border-b border-slate-800 px-4 py-3">
-              <div className="flex items-center gap-2">
-                <div className="h-3 w-3 rounded-full bg-red-500/80" />
-                <div className="h-3 w-3 rounded-full bg-yellow-500/80" />
-                <div className="h-3 w-3 rounded-full bg-green-500/80" />
-                <span className="ml-2 text-xs text-slate-500">quickstart.ts</span>
-              </div>
-              <button
-                onClick={handleCopy}
-                className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-300 transition-colors"
-              >
-                {copied ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
-                {copied ? "Copied" : "Copy"}
-              </button>
-            </div>
-            <pre className="p-6 text-sm leading-relaxed text-slate-300 overflow-x-auto">
-              <code>{code}</code>
-            </pre>
+            <p className="mt-4 max-w-2xl text-sm leading-relaxed text-muted-foreground">{item.a}</p>
           </motion.div>
-        </motion.div>
-      </div>
-    </section>
+        )}
+      </AnimatePresence>
+    </div>
   );
 }
 
-function WhoItsFor() {
-  const personas = [
-    { icon: FileCode2, title: "Coding agent platforms", desc: "Your agents touch repos, run commands, and ship code. Scope exactly what they can do, and require approval before anything destructive.", color: "from-blue-500/15 to-cyan-500/15" },
-    { icon: Users, title: "AI SDR & ops agents", desc: "Agents sending emails, updating CRMs, managing workflows — grant exactly the access they need, nothing more.", color: "from-emerald-500/15 to-blue-500/15" },
-    { icon: Zap, title: "Platform engineering", desc: "Internal automation agents that manage infrastructure, deploy services, and monitor systems — with guardrails.", color: "from-amber-500/15 to-orange-500/15" },
-  ];
-
-  return (
-    <section className="py-24">
-      <div className="mx-auto max-w-7xl px-6">
-        <motion.div
-          initial="hidden"
-          whileInView="visible"
-          viewport={{ once: true, margin: "-100px" }}
-          variants={stagger}
-          className="text-center"
-        >
-          <motion.h2 variants={fadeUp} className="text-3xl font-bold text-white sm:text-4xl">
-            Built for teams shipping real agent products
-          </motion.h2>
-        </motion.div>
-
-        <motion.div
-          initial="hidden"
-          whileInView="visible"
-          viewport={{ once: true, margin: "-100px" }}
-          variants={stagger}
-          className="mt-16 grid gap-6 md:grid-cols-3"
-        >
-          {personas.map((p) => (
-            <motion.div
-              key={p.title}
-              variants={fadeUp}
-              className={`group rounded-xl border border-slate-800 bg-gradient-to-br ${p.color} p-6 backdrop-blur-sm transition-all hover:border-slate-700`}
-            >
-              <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-white/5 text-blue-400">
-                <p.icon className="h-6 w-6" />
-              </div>
-              <h3 className="mt-4 text-lg font-semibold text-white">{p.title}</h3>
-              <p className="mt-2 text-sm text-slate-400">{p.desc}</p>
-            </motion.div>
-          ))}
-        </motion.div>
-      </div>
-    </section>
-  );
-}
-
-function CTASection() {
-  return (
-    <section className="relative py-24">
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_60%_40%_at_50%_50%,rgba(59,130,246,0.12),transparent)]" />
-      <div className="relative mx-auto max-w-7xl px-6 text-center">
-        <motion.div
-          initial="hidden"
-          whileInView="visible"
-          viewport={{ once: true }}
-          variants={stagger}
-        >
-          <motion.h2 variants={fadeUp} className="text-3xl font-bold text-white sm:text-4xl">
-            Ready to give your agents an identity?
-          </motion.h2>
-          <motion.p variants={fadeUp} className="mx-auto mt-4 max-w-xl text-slate-400">
-            Start building with AgentAuth today. Free tier includes up to 10 agents and 100K token requests.
-          </motion.p>
-          <motion.div variants={fadeUp} className="mt-8 flex items-center justify-center gap-4">
-            <Link to="/auth">
-              <Button size="lg" className="bg-blue-600 text-white hover:bg-blue-700 shadow-lg shadow-blue-600/25 px-8 text-base">
-                Get Started Free <ArrowRight className="ml-2 h-4 w-4" />
-              </Button>
-            </Link>
-          </motion.div>
-        </motion.div>
-      </div>
-    </section>
-  );
-}
-
-function Footer() {
-  return (
-    <footer className="border-t border-slate-800 py-12">
-      <div className="mx-auto max-w-7xl px-6">
-        <div className="flex flex-col items-center justify-between gap-6 md:flex-row">
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600">
-              <Shield className="h-4 w-4 text-white" />
-            </div>
-            <span className="text-lg font-bold text-white">AgentAuth</span>
-          </div>
-          <div className="flex gap-6">
-            {["Docs", "GitHub", "Discord", "Blog"].map((item) => (
-              <a key={item} href="#" className="text-sm text-slate-500 transition-colors hover:text-white">
-                {item}
-              </a>
-            ))}
-          </div>
-          <p className="text-xs text-slate-600">© 2025 AgentAuth. All rights reserved.</p>
-        </div>
-      </div>
-    </footer>
-  );
-}
-
+/* ── Main ────────────────────────────────────────────────────────────── */
 export default function LandingPage() {
+  const { scrollYProgress } = useScroll();
+  const headerBg = useTransform(scrollYProgress, [0, 0.05], ["rgba(237,234,227,0)", "rgba(237,234,227,0.85)"]);
+
   return (
-    <div className="min-h-screen bg-slate-950">
-      <Nav />
-      <main>
-        <HeroSection />
-        <ProblemSection />
-        <HowItWorksSection />
-        <FeaturesGrid />
-        <CodeExample />
-        <WhoItsFor />
-        <CTASection />
-      </main>
-      <Footer />
+    <div className="min-h-screen bg-background text-foreground">
+      {/* Header */}
+      <motion.header
+        style={{ backgroundColor: headerBg }}
+        className="fixed inset-x-0 top-0 z-50 backdrop-blur-md px-3 py-3 sm:px-5 sm:py-4"
+      >
+        <div className="flex items-center justify-between gap-2 sm:gap-4">
+          <nav className="hidden items-center gap-1 rounded-full bg-surface/60 px-3 py-1.5 shadow-[0_1px_2px_rgba(0,0,0,0.06)] backdrop-blur lg:flex">
+            {c.nav.links.map((l) => (
+              <a key={l.label} href={l.href} className="rounded-full px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground">{l.label}</a>
+            ))}
+          </nav>
+          <Link to="/" className="flex min-w-0 flex-1 items-center justify-center gap-2 rounded-full bg-surface/60 px-4 py-2 text-sm font-medium shadow-[0_1px_2px_rgba(0,0,0,0.06)] backdrop-blur sm:px-5 sm:py-2.5 lg:mx-auto lg:max-w-sm lg:flex-none lg:grow-0 lg:basis-96">
+            <span className="inline-block h-2 w-2 shrink-0 rounded-full bg-foreground" />AgentAuth
+          </Link>
+          <div className="flex shrink-0 items-center gap-1 rounded-full bg-surface/60 p-1 shadow-[0_1px_2px_rgba(0,0,0,0.06)] backdrop-blur sm:pl-2">
+            <Link to="/auth" className="hidden px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground sm:inline-block">Sign In</Link>
+            <Link to="/auth" className="whitespace-nowrap rounded-full bg-primary px-3 py-1.5 text-xs text-primary-foreground transition-all hover:opacity-90 hover:shadow-md sm:px-4 sm:text-sm">Get Started</Link>
+          </div>
+        </div>
+      </motion.header>
+
+      {/* Hero */}
+      <section className="mx-auto grid max-w-[100rem] items-center gap-12 px-5 pb-16 pt-28 sm:px-6 sm:pb-24 sm:pt-36 md:grid-cols-2 md:gap-10 md:px-10 md:pt-44 lg:px-16 lg:pt-52">
+        <div>
+          <FadeIn delay={0.1}>
+            <div className="eyebrow mb-6">{c.hero.eyebrow}</div>
+          </FadeIn>
+          <FadeIn delay={0.2}>
+            <h1 className="max-w-xl text-[2.5rem] leading-[1.05] tracking-tight sm:text-5xl md:text-[3.25rem] lg:text-[4.25rem] lg:leading-[1.02]">{c.hero.title}</h1>
+          </FadeIn>
+          <FadeIn delay={0.35}>
+            <p className="mt-6 max-w-md font-serif text-lg leading-relaxed text-muted-foreground sm:mt-8 sm:text-xl">{c.hero.body}</p>
+          </FadeIn>
+          <FadeIn delay={0.5}>
+            <div className="mt-8 flex flex-wrap items-center gap-3 sm:mt-12">
+              <Link to={c.hero.primaryCta.href} className="rounded-full bg-primary px-6 py-3 text-sm font-medium text-primary-foreground transition-all hover:opacity-90 hover:shadow-lg hover:shadow-foreground/10">{c.hero.primaryCta.label}</Link>
+              <a href={c.hero.secondaryCta.href} className="border border-dashed border-hairline px-6 py-3 text-sm transition-all hover:bg-surface hover:border-foreground/20">{c.hero.secondaryCta.label}</a>
+            </div>
+            <p className="mt-4 text-xs text-muted-foreground">{c.hero.supporting}</p>
+          </FadeIn>
+        </div>
+        <FadeIn delay={0.3} y={16} className="-order-1 md:order-none">
+          <AuthFlowDiagram />
+        </FadeIn>
+      </section>
+
+      {/* Problem */}
+      <section id="product" className="rule-x">
+        <div className="mx-auto max-w-[100rem] px-5 py-16 sm:px-6 sm:py-20 md:px-10 lg:px-16 lg:py-24">
+          <FadeIn>
+            <h2 className="max-w-3xl text-[2rem] sm:text-4xl md:text-[2.5rem] lg:text-[3.25rem]">{c.problem.heading}</h2>
+          </FadeIn>
+          <FadeIn delay={0.1}>
+            <p className="mt-6 max-w-2xl text-muted-foreground leading-relaxed">{c.problem.body}</p>
+          </FadeIn>
+          <StaggerContainer className="mt-10 grid gap-px overflow-hidden border border-hairline bg-hairline sm:mt-14 md:grid-cols-3">
+            {c.problem.cards.map((card) => (
+              <motion.article key={card.title} variants={staggerItem} className="bg-background p-6 sm:p-8 transition-colors hover:bg-surface/50">
+                <h3 className="text-xl">{card.title}</h3>
+                <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{card.body}</p>
+              </motion.article>
+            ))}
+          </StaggerContainer>
+        </div>
+      </section>
+
+      {/* How It Works */}
+      <section className="rule-x">
+        <div className="mx-auto max-w-[100rem] px-5 py-16 sm:px-6 sm:py-20 md:px-10 lg:px-16 lg:py-24">
+          <FadeIn><SectionLabel n="02">How it works</SectionLabel></FadeIn>
+          <FadeIn delay={0.1}>
+            <h2 className="mt-8 max-w-3xl text-[2rem] sm:text-4xl md:text-[2.5rem] lg:text-[3.25rem]">{c.howItWorks.heading}</h2>
+          </FadeIn>
+          <StaggerContainer className="mt-10 grid gap-px overflow-hidden border border-hairline bg-hairline sm:mt-14 md:grid-cols-2 lg:grid-cols-4">
+            {c.howItWorks.steps.map((s) => (
+              <motion.article key={s.num} variants={staggerItem} className="bg-background p-6 sm:p-8 transition-colors hover:bg-surface/50">
+                <div className="eyebrow mb-6">{s.num} — {s.title}</div>
+                <p className="text-sm leading-relaxed text-muted-foreground">{s.body}</p>
+              </motion.article>
+            ))}
+          </StaggerContainer>
+        </div>
+      </section>
+
+      {/* Features */}
+      <section className="rule-x">
+        <div className="mx-auto max-w-[100rem] px-5 py-16 sm:px-6 sm:py-20 md:px-10 lg:px-16 lg:py-24">
+          <FadeIn>
+            <h2 className="max-w-3xl text-[2rem] sm:text-4xl md:text-[2.5rem] lg:text-[3.25rem]">{c.features.heading}</h2>
+          </FadeIn>
+          <StaggerContainer className="mt-10 grid gap-px overflow-hidden border border-hairline bg-hairline sm:mt-14 md:grid-cols-2 lg:grid-cols-4">
+            {c.features.items.map((f) => (
+              <motion.article key={f.title} variants={staggerItem} className="bg-background p-6 sm:p-8 transition-colors hover:bg-surface/50">
+                <h3 className="text-lg">{f.title}</h3>
+                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{f.body}</p>
+              </motion.article>
+            ))}
+          </StaggerContainer>
+        </div>
+      </section>
+
+      {/* Who It's For */}
+      <section className="rule-x">
+        <div className="mx-auto max-w-[100rem] px-5 py-16 sm:px-6 sm:py-20 md:px-10 lg:px-16 lg:py-24">
+          <FadeIn>
+            <h2 className="max-w-3xl text-[2rem] sm:text-4xl md:text-[2.5rem] lg:text-[3.25rem]">{c.whoItsFor.heading}</h2>
+          </FadeIn>
+          <StaggerContainer className="mt-10 grid gap-px overflow-hidden border border-hairline bg-hairline sm:mt-14 md:grid-cols-3">
+            {c.whoItsFor.cards.map((card) => (
+              <motion.article key={card.title} variants={staggerItem} className="bg-background p-6 sm:p-8 transition-colors hover:bg-surface/50">
+                <div className="eyebrow">{card.tag}</div>
+                <h3 className="mt-6 text-xl">{card.title}</h3>
+                <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{card.body}</p>
+              </motion.article>
+            ))}
+          </StaggerContainer>
+        </div>
+      </section>
+
+      {/* Code Sample */}
+      <section className="rule-x">
+        <div className="mx-auto grid max-w-[100rem] gap-10 px-5 py-16 sm:px-6 sm:py-20 md:grid-cols-[1fr_1.4fr] md:px-10 lg:px-16 lg:py-24">
+          <FadeIn>
+            <div>
+              <SectionLabel n="05">SDK</SectionLabel>
+              <h2 className="mt-8 text-[2rem] leading-tight sm:text-3xl lg:text-[2.75rem]">{c.codeSample.heading}</h2>
+            </div>
+          </FadeIn>
+          <FadeIn delay={0.15}>
+            <div>
+              <div className="rounded-2xl border border-hairline bg-surface/60 overflow-hidden">
+                <div className="flex items-center gap-2 px-4 py-3 border-b border-hairline">
+                  <span className="inline-block h-2.5 w-2.5 rounded-full bg-muted" />
+                  <span className="inline-block h-2.5 w-2.5 rounded-full bg-muted" />
+                  <span className="inline-block h-2.5 w-2.5 rounded-full bg-muted" />
+                  <span className="ml-2 text-xs text-muted-foreground font-mono">quickstart.py</span>
+                </div>
+                <pre className="p-6 text-sm font-mono text-foreground/80 overflow-x-auto leading-relaxed"><code>{c.codeSample.code}</code></pre>
+              </div>
+              <p className="mt-4 text-xs text-muted-foreground">{c.codeSample.caption} Full docs at <a href="#docs" className="underline hover:text-foreground">docs.agentauth.com</a>.</p>
+            </div>
+          </FadeIn>
+        </div>
+      </section>
+
+      {/* Social Proof */}
+      <section className="rule-x">
+        <div className="mx-auto max-w-[100rem] px-5 py-16 text-center sm:px-6 md:px-10 lg:px-16 lg:py-20">
+          <FadeIn>
+            <p className="eyebrow mb-8">{c.socialProof.heading}</p>
+          </FadeIn>
+          <StaggerContainer className="flex items-center justify-center gap-12 text-muted-foreground/40">
+            {["Acme Corp", "TechFlow", "DataPilot", "AgentOps", "BuildAI"].map((n) => (
+              <motion.span key={n} variants={staggerItem} className="text-lg font-medium transition-colors hover:text-muted-foreground/70">{n}</motion.span>
+            ))}
+          </StaggerContainer>
+        </div>
+      </section>
+
+      {/* Pricing */}
+      <section id="pricing" className="rule-x">
+        <div className="mx-auto max-w-[100rem] px-5 py-16 sm:px-6 sm:py-20 md:px-10 lg:px-16 lg:py-24">
+          <FadeIn>
+            <h2 className="text-center text-[2rem] sm:text-4xl md:text-[2.5rem] lg:text-[3.25rem]">{c.pricing.heading}</h2>
+          </FadeIn>
+          <StaggerContainer className="mt-12 grid gap-6 md:grid-cols-3 max-w-4xl mx-auto">
+            {c.pricing.plans.map((plan) => (
+              <motion.div
+                key={plan.name}
+                variants={staggerItem}
+                whileHover={{ y: -4 }}
+                transition={{ duration: 0.25 }}
+                className={`rounded-2xl border p-6 sm:p-8 transition-shadow ${plan.highlighted ? "border-foreground bg-foreground text-primary-foreground shadow-xl shadow-foreground/10" : "border-hairline bg-surface/60 hover:shadow-lg hover:shadow-foreground/5"}`}
+              >
+                <h3 className="text-lg">{plan.name}</h3>
+                <div className="mt-4 flex items-baseline gap-1"><span className="text-3xl font-serif">{plan.price}</span>{plan.period && <span className="text-sm text-muted-foreground">{plan.period}</span>}</div>
+                <ul className="mt-6 space-y-2.5">
+                  {plan.features.map((f) => (<li key={f} className="flex items-start gap-2 text-sm"><span className="mt-1 h-1 w-1 shrink-0 rounded-full bg-current" /><span className={plan.highlighted ? "text-primary-foreground/80" : "text-muted-foreground"}>{f}</span></li>))}
+                </ul>
+                <Link to="/auth" className={`mt-8 block w-full rounded-full py-2.5 text-center text-sm font-medium transition-all hover:opacity-90 hover:shadow-md ${plan.highlighted ? "bg-primary-foreground text-foreground" : "bg-foreground text-primary-foreground"}`}>{plan.cta}</Link>
+              </motion.div>
+            ))}
+          </StaggerContainer>
+        </div>
+      </section>
+
+      {/* FAQ */}
+      <section className="rule-x">
+        <div className="mx-auto grid max-w-[100rem] gap-10 px-5 py-16 sm:px-6 sm:py-20 md:grid-cols-[1fr_1.4fr] md:px-10 lg:px-16 lg:py-24">
+          <FadeIn><div><SectionLabel n="06">FAQ</SectionLabel><h2 className="mt-8 text-[2rem] leading-tight sm:text-4xl lg:text-[3rem]">Questions & answers.</h2></div></FadeIn>
+          <FadeIn delay={0.1}><div>{faqItems.map((f) => (<FAQItem key={f.q} item={f} />))}</div></FadeIn>
+        </div>
+      </section>
+
+      {/* Final CTA */}
+      <section className="rule-x">
+        <div className="mx-auto max-w-[100rem] px-5 py-24 text-center sm:px-6 md:px-10 lg:px-16 lg:py-32">
+          <FadeIn>
+            <h2 className="mx-auto max-w-3xl text-[2.25rem] leading-[1.08] sm:text-5xl lg:text-[4rem]">{c.finalCta.heading}</h2>
+          </FadeIn>
+          <FadeIn delay={0.15}>
+            <p className="mx-auto mt-6 max-w-md font-serif text-lg text-muted-foreground">{c.finalCta.body}</p>
+          </FadeIn>
+          <FadeIn delay={0.3}>
+            <div className="mt-10"><Link to={c.finalCta.cta.href} className="rounded-full bg-primary px-8 py-3.5 text-sm font-medium text-primary-foreground transition-all hover:opacity-90 hover:shadow-lg hover:shadow-foreground/10">{c.finalCta.cta.label}</Link></div>
+          </FadeIn>
+        </div>
+      </section>
+
+      {/* Footer */}
+      <footer className="rule-x">
+        <div className="mx-auto max-w-[100rem] px-5 py-12 sm:px-6 md:px-10 lg:px-16 lg:py-16">
+          <div className="grid grid-cols-2 gap-8 sm:gap-10 md:grid-cols-5">
+            <div className="col-span-2 md:col-span-1">
+              <div className="flex items-center gap-2 mb-5"><span className="inline-block h-2 w-2 rounded-full bg-foreground" /><span className="font-medium">AgentAuth</span></div>
+              <p className="text-sm text-muted-foreground leading-relaxed">Identity and permissions infrastructure for AI agents.</p>
+            </div>
+            {c.footer.columns.map((col) => (<div key={col.title}><div className="eyebrow">{col.title}</div><ul className="mt-5 space-y-2.5 text-sm">{col.links.map((l) => (<li key={l.label}><a href={l.href} className="text-muted-foreground transition-colors hover:text-foreground">{l.label}</a></li>))}</ul></div>))}
+          </div>
+          <div className="mt-12 flex flex-wrap items-center justify-between gap-3 rule-x pt-6 sm:mt-16 sm:gap-4 text-xs text-muted-foreground">
+            <span>© 2025 AgentAuth. All rights reserved.</span>
+            <div className="flex items-center gap-2"><span className="inline-block h-1.5 w-1.5 rounded-full bg-foreground" />All systems operational</div>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }

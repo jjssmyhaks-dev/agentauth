@@ -1,106 +1,150 @@
-import { useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useState, useEffect, useCallback } from "react";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useDashboard } from "@/context/DashboardContext";
-import { CheckCircle2, XCircle, Clock, Shield } from "lucide-react";
+import { useNotifications } from "@/context/NotificationContext";
+import { CheckCircle2, XCircle, Clock } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+
+function TimeAgo({ date }: { date: string }) {
+  const [text, setText] = useState("");
+  useEffect(() => {
+    const update = () => {
+      const diff = Math.floor((Date.now() - new Date(date).getTime()) / 60000);
+      setText(diff < 1 ? "just now" : diff < 60 ? `waiting ${diff} min` : `${Math.floor(diff / 60)}h ${diff % 60}m`);
+    };
+    update();
+    const i = setInterval(update, 30000);
+    return () => clearInterval(i);
+  }, [date]);
+  return <span className="text-xs text-muted-foreground">{text}</span>;
+}
 
 export default function ApprovalsPage() {
   const { approvals, approveRequest, denyRequest } = useDashboard();
+  const { addNotification, pushToast } = useNotifications();
   const [tab, setTab] = useState("pending");
   const [denyId, setDenyId] = useState<string | null>(null);
   const [denyReason, setDenyReason] = useState("");
-
   const filtered = approvals.filter((a) => tab === "all" || a.status === tab);
 
-  const handleDeny = () => {
-    if (denyId && denyReason) {
-      denyRequest(denyId, denyReason);
-      setDenyId(null);
-      setDenyReason("");
+  const handleApprove = useCallback((id: string) => {
+    const approval = approvals.find((a) => a.id === id);
+    approveRequest(id);
+    if (approval) {
+      addNotification({
+        type: "approval",
+        priority: "medium",
+        title: `Approved: ${approval.action} on ${approval.resourceType}`,
+        message: `${approval.agentName} request for ${approval.resource} has been approved`,
+        agentId: approval.agentId,
+        agentName: approval.agentName,
+        actionUrl: `/dashboard/approvals`,
+      });
+      pushToast({ type: "approval", priority: "medium", title: "Request approved", message: `${approval.agentName} — ${approval.action} ${approval.resource}` });
     }
-  };
+  }, [approvals, approveRequest, addNotification, pushToast]);
+
+  const handleDeny = useCallback(() => {
+    if (!denyId || !denyReason) return;
+    const approval = approvals.find((a) => a.id === denyId);
+    denyRequest(denyId, denyReason);
+    if (approval) {
+      addNotification({
+        type: "approval",
+        priority: "medium",
+        title: `Denied: ${approval.action} on ${approval.resourceType}`,
+        message: `${approval.agentName} request for ${approval.resource} was denied — ${denyReason}`,
+        agentId: approval.agentId,
+        agentName: approval.agentName,
+        actionUrl: `/dashboard/approvals`,
+      });
+    }
+    setDenyId(null);
+    setDenyReason("");
+  }, [denyId, denyReason, approvals, denyRequest, addNotification]);
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-white">Approvals</h1>
-        <p className="text-sm text-slate-400">Review and decide on pending agent action requests.</p>
-      </div>
-
-      <Tabs value={tab} onValueChange={setTab}>
-        <TabsList className="bg-slate-900 border border-slate-800">
-          <TabsTrigger value="pending">Pending ({approvals.filter((a) => a.status === "pending").length})</TabsTrigger>
-          <TabsTrigger value="approved">Approved ({approvals.filter((a) => a.status === "approved").length})</TabsTrigger>
-          <TabsTrigger value="denied">Denied ({approvals.filter((a) => a.status === "denied").length})</TabsTrigger>
-          <TabsTrigger value="all">All</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value={tab} className="space-y-4">
-          {filtered.length === 0 ? (
-            <Card className="border-slate-800 bg-slate-900/50"><CardContent className="p-12 text-center text-slate-500">
-              {tab === "pending" ? "No pending approvals — all caught up!" : `No ${tab} approvals.`}
-            </CardContent></Card>
-          ) : (
-            filtered.map((a) => (
-              <Card key={a.id} className="border-slate-800 bg-slate-900/50">
-                <CardContent className="p-5">
-                  <div className="flex items-start gap-4">
-                    <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${a.status === "pending" ? "bg-amber-500/15" : a.status === "approved" ? "bg-emerald-500/15" : "bg-red-500/15"}`}>
-                      {a.status === "pending" ? <Clock className="h-5 w-5 text-amber-400" /> : a.status === "approved" ? <CheckCircle2 className="h-5 w-5 text-emerald-400" /> : <XCircle className="h-5 w-5 text-red-400" />}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-3">
-                        <h3 className="font-semibold text-white">{a.agentName}</h3>
-                        <Badge variant={a.status === "pending" ? "warning" : a.status === "approved" ? "success" : "destructive"}>{a.status}</Badge>
-                        <Badge variant="outline">{a.action} {a.resourceType}</Badge>
-                      </div>
-                      <p className="mt-2 text-sm text-slate-400 font-mono bg-slate-800/50 rounded-lg p-3">{a.context}</p>
-                      <div className="mt-3 flex items-center gap-4 text-xs text-slate-500">
-                        <span>Resource: {a.resource}</span>
-                        <span>Requested: {new Date(a.requestedAt).toLocaleString()}</span>
-                        {a.decidedAt && <span>Decided: {new Date(a.decidedAt).toLocaleString()}</span>}
-                        {a.decidedBy && <span>By: {a.decidedBy}</span>}
-                      </div>
-                      {a.denialReason && (
-                        <div className="mt-2 rounded-lg border border-red-500/20 bg-red-500/5 p-2 text-xs text-red-400">
-                          Denial reason: {a.denialReason}
+      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
+        <h1 className="text-2xl font-serif">Approvals</h1>
+        <p className="text-sm text-muted-foreground">Review and decide on pending agent action requests.</p>
+      </motion.div>
+      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.1 }}>
+        <Tabs value={tab} onValueChange={setTab}>
+          <TabsList className="bg-muted border border-hairline">
+            <TabsTrigger value="pending">Pending ({approvals.filter((a) => a.status === "pending").length})</TabsTrigger>
+            <TabsTrigger value="approved">Approved ({approvals.filter((a) => a.status === "approved").length})</TabsTrigger>
+            <TabsTrigger value="denied">Denied ({approvals.filter((a) => a.status === "denied").length})</TabsTrigger>
+            <TabsTrigger value="all">All</TabsTrigger>
+          </TabsList>
+          <TabsContent value={tab} className="space-y-4">
+            {filtered.length === 0 ? (
+              <Card className="border-hairline bg-surface/60"><CardContent className="py-12 text-center text-sm text-muted-foreground">
+                {tab === "pending" ? "All caught up — nothing needs your review right now." : `No ${tab} approvals.`}
+              </CardContent></Card>
+            ) : (
+              <AnimatePresence mode="popLayout">
+                {filtered.map((a, i) => (
+                  <motion.div
+                    key={a.id}
+                    layout
+                    initial={{ opacity: 0, y: 12 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.98 }}
+                    transition={{ duration: 0.3, delay: i * 0.04, ease: [0.22, 1, 0.36, 1] }}
+                  >
+                    <Card className="border-hairline bg-surface/60 transition-shadow hover:shadow-md hover:shadow-foreground/5">
+                      <CardContent className="p-5">
+                        <div className="flex items-start gap-4">
+                          <motion.div
+                            initial={{ scale: 0.8 }}
+                            animate={{ scale: 1 }}
+                            transition={{ duration: 0.3, delay: i * 0.04 + 0.1 }}
+                            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${a.status === "pending" ? "bg-amber-100" : a.status === "approved" ? "bg-green-100" : "bg-red-100"}`}
+                          >
+                            {a.status === "pending" ? <Clock className="h-5 w-5 text-amber-600" /> : a.status === "approved" ? <CheckCircle2 className="h-5 w-5 text-green-600" /> : <XCircle className="h-5 w-5 text-red-600" />}
+                          </motion.div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-3 flex-wrap">
+                              <h3 className="font-medium">{a.agentName}</h3>
+                              <Badge variant={a.status === "pending" ? "warning" : a.status === "approved" ? "success" : "destructive"}>{a.status}</Badge>
+                              <Badge variant="outline">{a.action} {a.resourceType}</Badge>
+                            </div>
+                            <p className="mt-2 text-sm font-mono text-muted-foreground bg-muted/50 rounded-xl p-3 border border-hairline/50">{a.context}</p>
+                            <div className="mt-3 flex items-center gap-4 text-xs text-muted-foreground">
+                              <span>Resource: {a.resource}</span>
+                              {a.status === "pending" && <TimeAgo date={a.requestedAt} />}
+                              {a.decidedAt && <span>Decided: {new Date(a.decidedAt).toLocaleString()}</span>}
+                              {a.decidedBy && <span>By: {a.decidedBy}</span>}
+                            </div>
+                            {a.denialReason && <div className="mt-2 rounded-xl border border-destructive/20 bg-destructive/5 p-2 text-xs text-destructive">Reason: {a.denialReason}</div>}
+                          </div>
+                          {a.status === "pending" && (
+                            <div className="flex gap-1.5">
+                              <Button size="sm" className="h-8 rounded-full bg-green-600 text-white text-xs hover:bg-green-700" onClick={() => handleApprove(a.id)}>Approve</Button>
+                              <Button size="sm" variant="destructive" className="h-8 rounded-full text-xs" onClick={() => setDenyId(a.id)}>Deny</Button>
+                            </div>
+                          )}
                         </div>
-                      )}
-                    </div>
-                    {a.status === "pending" && (
-                      <div className="flex gap-2">
-                        <Button size="sm" className="bg-emerald-600 text-white hover:bg-emerald-700" onClick={() => approveRequest(a.id)}>
-                          <CheckCircle2 className="mr-1 h-3.5 w-3.5" /> Approve
-                        </Button>
-                        <Button size="sm" variant="destructive" onClick={() => setDenyId(a.id)}>
-                          <XCircle className="mr-1 h-3.5 w-3.5" /> Deny
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            ))
-          )}
-        </TabsContent>
-      </Tabs>
-
+                      </CardContent>
+                    </Card>
+                  </motion.div>
+                ))}
+              </AnimatePresence>
+            )}
+          </TabsContent>
+        </Tabs>
+      </motion.div>
       <Dialog open={!!denyId} onOpenChange={() => setDenyId(null)}>
-        <DialogContent className="border-slate-800 bg-slate-900 text-white">
-          <DialogHeader>
-            <DialogTitle>Deny Request</DialogTitle>
-          </DialogHeader>
-          <div className="py-4">
-            <Textarea placeholder="Reason for denial..." value={denyReason} onChange={(e) => setDenyReason(e.target.value)} className="border-slate-700 bg-slate-800 text-white" />
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDenyId(null)} className="border-slate-700 text-slate-300">Cancel</Button>
-            <Button variant="destructive" onClick={handleDeny} disabled={!denyReason}>Deny with reason</Button>
-          </DialogFooter>
+        <DialogContent className="border-hairline bg-surface">
+          <DialogHeader><DialogTitle>Deny Request</DialogTitle></DialogHeader>
+          <div className="py-4"><Textarea placeholder="Reason for denial..." value={denyReason} onChange={(e) => setDenyReason(e.target.value)} className="rounded-xl border-hairline bg-background" /></div>
+          <DialogFooter><Button variant="outline" onClick={() => setDenyId(null)} className="rounded-full border-hairline">Cancel</Button><Button variant="destructive" onClick={handleDeny} disabled={!denyReason}>Deny</Button></DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

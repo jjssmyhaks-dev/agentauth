@@ -6,86 +6,55 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { useDashboard } from "@/context/DashboardContext";
-import { Plus, Globe, Pause, Play, Trash2, Send } from "lucide-react";
+import { Plus, Globe, Pause, Play, Send, Copy, Check } from "lucide-react";
 
 export default function WebhooksPage() {
   const { webhooks, addWebhook, pauseWebhook } = useDashboard();
   const [showCreate, setShowCreate] = useState(false);
   const [url, setUrl] = useState("");
   const [events, setEvents] = useState("approval.decided,agent.revoked");
+  const [copied, setCopied] = useState(false);
 
   const handleCreate = () => {
-    addWebhook({
-      id: "wh_" + Date.now().toString(36), url, eventTypes: events.split(",").map((e) => e.trim()),
-      status: "active", lastDeliveryAt: null, secret: "whsec_" + Math.random().toString(36).slice(2, 16),
-      createdAt: new Date().toISOString(),
-    });
-    setUrl(""); setEvents(""); setShowCreate(false);
+    addWebhook({ id: "wh_" + Date.now().toString(36), url, eventTypes: events.split(",").map((e) => e.trim()), status: "active", lastDeliveryAt: null, secret: "whsec_" + Math.random().toString(36).slice(2, 16), createdAt: new Date().toISOString() });
+    setUrl(""); setShowCreate(false);
   };
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-white">Webhooks</h1>
-          <p className="text-sm text-slate-400">Receive notifications for agent events via HTTP callbacks.</p>
-        </div>
-        <Button onClick={() => setShowCreate(true)} className="bg-blue-600 text-white hover:bg-blue-700"><Plus className="mr-2 h-4 w-4" /> Add Webhook</Button>
+        <div><h1 className="text-2xl font-serif">Webhooks</h1><p className="text-sm text-muted-foreground">Get notified the moment an approval is decided or an agent's access changes.</p></div>
+        <Button onClick={() => setShowCreate(true)} className="rounded-full bg-primary text-primary-foreground hover:opacity-90"><Plus className="mr-2 h-4 w-4" /> Add Webhook</Button>
       </div>
-
-      <div className="space-y-4">
-        {webhooks.map((wh) => (
-          <Card key={wh.id} className="border-slate-800 bg-slate-900/50">
-            <CardContent className="p-5">
-              <div className="flex items-start gap-4">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-purple-500/15">
-                  <Globe className="h-5 w-5 text-purple-400" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <p className="font-mono text-sm text-white truncate">{wh.url}</p>
-                    <Badge variant={wh.status === "active" ? "success" : wh.status === "paused" ? "warning" : "destructive"}>{wh.status}</Badge>
+      <Card className="border-hairline bg-surface/60">
+        <CardContent className="p-0">
+          {webhooks.length === 0 ? (
+            <p className="py-12 text-center text-sm text-muted-foreground">No webhooks configured. Add one to get notified the moment an approval is decided or an agent's access changes.</p>
+          ) : (
+            <div className="divide-y divide-hairline/50">
+              {webhooks.map((wh) => (
+                <div key={wh.id} className="flex items-center gap-4 p-4 hover:bg-foreground/[0.02]">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-muted"><Globe className="h-5 w-5" /></div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2"><p className="font-mono text-sm truncate">{wh.url}</p><Badge variant={wh.status === "active" ? "success" : "warning"}>{wh.status}</Badge></div>
+                    <div className="mt-1.5 flex flex-wrap gap-1">{wh.eventTypes.map((et) => <Badge key={et} variant="outline" className="text-xs">{et}</Badge>)}</div>
+                    <p className="mt-1 text-xs text-muted-foreground">Secret: {wh.secret}</p>
                   </div>
-                  <div className="mt-2 flex flex-wrap gap-1">
-                    {wh.eventTypes.map((et) => <Badge key={et} variant="outline" className="text-xs">{et}</Badge>)}
-                  </div>
-                  <div className="mt-2 flex items-center gap-4 text-xs text-slate-500">
-                    <span>Secret: {wh.secret}</span>
-                    {wh.lastDeliveryAt && <span>Last delivery: {new Date(wh.lastDeliveryAt).toLocaleString()}</span>}
-                  </div>
+                  <div className="flex gap-1"><Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground"><Send className="h-3.5 w-3.5" /></Button><Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground" onClick={() => pauseWebhook(wh.id)}>{wh.status === "active" ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}</Button></div>
                 </div>
-                <div className="flex gap-1">
-                  <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-white" title="Send test"><Send className="h-3.5 w-3.5" /></Button>
-                  <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-white" onClick={() => pauseWebhook(wh.id)} title={wh.status === "active" ? "Pause" : "Resume"}>
-                    {wh.status === "active" ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
       <Dialog open={showCreate} onOpenChange={setShowCreate}>
-        <DialogContent className="border-slate-800 bg-slate-900 text-white">
-          <DialogHeader>
-            <DialogTitle>Add Webhook</DialogTitle>
-            <DialogDescription className="text-slate-400">Send HTTP POST to your endpoint on agent events.</DialogDescription>
-          </DialogHeader>
+        <DialogContent className="border-hairline bg-surface">
+          <DialogHeader><DialogTitle>Add Webhook</DialogTitle><DialogDescription className="text-muted-foreground">Send HTTP POST to your endpoint on agent events.</DialogDescription></DialogHeader>
           <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label className="text-slate-300">Endpoint URL</Label>
-              <Input placeholder="https://your-app.com/webhooks/agentauth" value={url} onChange={(e) => setUrl(e.target.value)} className="border-slate-700 bg-slate-800 text-white" />
-            </div>
-            <div className="space-y-2">
-              <Label className="text-slate-300">Event Types (comma-separated)</Label>
-              <Input placeholder="approval.decided, agent.revoked" value={events} onChange={(e) => setEvents(e.target.value)} className="border-slate-700 bg-slate-800 text-white" />
-            </div>
+            <div className="space-y-2"><Label>URL</Label><Input placeholder="https://your-app.com/webhooks/agentauth" value={url} onChange={(e) => setUrl(e.target.value)} className="rounded-xl border-hairline bg-background" /></div>
+            <div className="space-y-2"><Label>Event Types (comma-separated)</Label><Input placeholder="approval.decided, agent.revoked" value={events} onChange={(e) => setEvents(e.target.value)} className="rounded-xl border-hairline bg-background" /></div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowCreate(false)} className="border-slate-700 text-slate-300">Cancel</Button>
-            <Button onClick={handleCreate} disabled={!url} className="bg-blue-600 text-white hover:bg-blue-700">Add Webhook</Button>
-          </DialogFooter>
+          <DialogFooter><Button variant="outline" onClick={() => setShowCreate(false)} className="rounded-full border-hairline">Cancel</Button><Button onClick={handleCreate} disabled={!url} className="rounded-full bg-primary text-primary-foreground hover:opacity-90">Add Webhook</Button></DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { DashboardProvider } from "@/context/DashboardContext";
+import { NotificationProvider } from "@/context/NotificationContext";
 import LandingPage from "@/pages/LandingPage";
 import AuthPage from "@/pages/AuthPage";
 import DashboardLayout from "@/pages/dashboard/Layout";
@@ -15,6 +16,7 @@ import WebhooksPage from "@/pages/dashboard/WebhooksPage";
 import ApiKeysPage from "@/pages/dashboard/ApiKeysPage";
 import SettingsPage from "@/pages/dashboard/SettingsPage";
 import DocsPage from "@/pages/dashboard/DocsPage";
+import NotificationsPage from "@/pages/dashboard/NotificationsPage"
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuth();
@@ -37,9 +39,11 @@ function AppRoutes() {
         path="/dashboard"
         element={
           <RequireAuth>
-            <DashboardProvider>
-              <DashboardLayout />
-            </DashboardProvider>
+            <NotificationProvider>
+              <DashboardProvider>
+                <DashboardLayout />
+              </DashboardProvider>
+            </NotificationProvider>
           </RequireAuth>
         }
       >
@@ -52,6 +56,7 @@ function AppRoutes() {
         <Route path="analytics" element={<AnalyticsPage />} />
         <Route path="webhooks" element={<WebhooksPage />} />
         <Route path="api-keys" element={<ApiKeysPage />} />
+        <Route path="notifications" element={<NotificationsPage />} />
         <Route path="settings" element={<SettingsPage />} />
         <Route path="docs" element={<DocsPage />} />
       </Route>

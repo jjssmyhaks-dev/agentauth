@@ -28,15 +28,15 @@ export default function ApprovalsPage() {
   return (
     <div className="animate-fade-in">
       <div className="mb-6">
-        <h1 className="text-xl font-semibold text-gray-900 dark:text-white">Approvals</h1>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Review and decide pending agent actions.</p>
+        <h1 className="text-2xl">Approvals</h1>
+        <p >Review and decide pending agent actions.</p>
       </div>
 
       <div className="flex gap-2 mb-4">
         {['pending', 'approved', 'denied'].map((f) => (
           <button key={f} onClick={() => setFilter(f)}
-            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-              filter === f ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
+            className={`px-3 py-1.5 text-sm font-medium transition-colors ${
+              filter === f ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-surface'
             }`}>
             {f.charAt(0).toUpperCase() + f.slice(1)}
           </button>
@@ -44,13 +44,13 @@ export default function ApprovalsPage() {
       </div>
 
       {loading ? <TableSkeleton /> : approvals.length === 0 ? (
-        <div className="text-center py-16 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl">
-          <p className="text-gray-500 dark:text-gray-400">No {filter} approvals.</p>
+        <div className="border border-hairline bg-surface p-16 text-center">
+          <p className="text-muted-foreground">No {filter} approvals.</p>
         </div>
       ) : (
         <div className="space-y-3">
           {approvals.map((a) => (
-            <div key={a.id} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-5 flex items-center justify-between">
+            <div key={a.id} className="bg-background border border-hairline p-5 flex items-center justify-between">
               <div>
                 <div className="font-medium text-gray-900 dark:text-white">{a.action}</div>
                 <div className="text-sm text-gray-500 dark:text-gray-400">{a.resource}</div>

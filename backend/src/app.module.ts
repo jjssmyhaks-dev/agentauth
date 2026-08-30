@@ -16,7 +16,21 @@ import { AppService } from './app.service';
 import {
   Organization, User, Agent, Grant, TokenIssued,
   PendingApproval, AuditLog, Webhook,
+  Policy, TrustScore, TrustEvent, Session,
+  EnvironmentFingerprint, AgentKey, AgentAttribute,
+  AgentGroup, SyncSource, SyncJob, DocEmbedding,
+  AgentUsage,
 } from './database/entities';
+import { PoliciesModule } from './modules/policies/policies.module';
+import { TrustModule } from './modules/trust/trust.module';
+import { AttributesModule } from './modules/attributes/attributes.module';
+import { SessionsModule } from './modules/sessions/sessions.module';
+import { FingerprintsModule } from './modules/fingerprints/fingerprints.module';
+import { KeyRotationModule } from './modules/key-rotation/key-rotation.module';
+import { GraphModule } from './modules/graph/graph.module';
+import { SyncModule } from './modules/sync/sync.module';
+import { AssistantModule } from './modules/assistant/assistant.module';
+import { AnalyticsModule } from './modules/analytics/analytics.module';
 
 @Module({
   imports: [
@@ -35,6 +49,9 @@ import {
       entities: [
         Organization, User, Agent, Grant, TokenIssued,
         PendingApproval, AuditLog, Webhook,
+        Policy, TrustScore, TrustEvent, Session,
+        EnvironmentFingerprint, AgentKey, AgentAttribute,
+        AgentGroup, SyncSource, SyncJob, DocEmbedding,
       ],
       ssl: process.env.DATABASE_URL?.includes('sslmode=require')
         ? { rejectUnauthorized: false }
@@ -51,6 +68,16 @@ import {
     ApprovalModule,
     WebhooksModule,
     OrgsModule,
+    PoliciesModule,
+    TrustModule,
+    AttributesModule,
+    SessionsModule,
+    FingerprintsModule,
+    KeyRotationModule,
+    GraphModule,
+    SyncModule,
+    AssistantModule,
+    AnalyticsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
@@ -59,6 +86,6 @@ export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
     consumer
       .apply(RateLimiterMiddleware)
-      .forRoutes('v1/tokens', 'v1/permissions');
+      .forRoutes('v1/tokens', 'v1/permissions', 'v1/analytics');
   }
 }

@@ -157,3 +157,28 @@ export const webhooksApi = {
       method: 'POST',
     }),
 };
+
+// Analytics endpoints
+export const analyticsApi = {
+  overview: (orgId: string) =>
+    fetchApi<any>(`/api/v1/analytics/overview?org_id=${orgId}`),
+
+  usage: (orgId: string, days?: number) =>
+    fetchApi<any[]>(`/api/v1/analytics/usage?org_id=${orgId}${days ? `&days=${days}` : ''}`),
+
+  timeSeries: (orgId: string, agentId?: string, days?: number) => {
+    const params = new URLSearchParams({ org_id: orgId });
+    if (agentId) params.set('agent_id', agentId);
+    if (days) params.set('days', days.toString());
+    return fetchApi<any[]>(`/api/v1/analytics/timeseries?${params.toString()}`);
+  },
+
+  performance: (orgId: string) =>
+    fetchApi<any[]>(`/api/v1/analytics/performance?org_id=${orgId}`),
+
+  feedback: (orgId: string, agentId: string) =>
+    fetchApi<any>(`/api/v1/analytics/feedback/${agentId}?org_id=${orgId}`),
+
+  topAgents: (orgId: string, limit?: number) =>
+    fetchApi<any[]>(`/api/v1/analytics/top-agents?org_id=${orgId}${limit ? `&limit=${limit}` : ''}`),
+};

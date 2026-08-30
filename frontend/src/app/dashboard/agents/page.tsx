@@ -1,8 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { Plus, RotateCw, Ban, Search } from 'lucide-react';
-import { TableSkeleton } from '@/components/loading-skeleton';
 import { agentsApi } from '@/lib/api';
 
 export default function AgentsPage() {
@@ -42,40 +42,39 @@ export default function AgentsPage() {
     <div className="animate-fade-in">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-xl font-semibold text-gray-900 dark:text-white">Agents</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Manage your registered AI agents.</p>
+          <h1 className="text-2xl">Agents</h1>
         </div>
         <button
           onClick={() => setShowCreate(!showCreate)}
-          className="flex items-center gap-2 bg-gray-900 dark:bg-white text-white dark:text-gray-900 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-800 dark:hover:bg-gray-100 transition-colors"
+          className="flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2 text-sm font-medium rounded-full transition-opacity hover:opacity-90"
         >
           <Plus className="w-4 h-4" />
-          Register agent
+          New Agent
         </button>
       </div>
 
       {showCreate && (
-        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-5 mb-6">
-          <h3 className="font-medium text-gray-900 dark:text-white mb-4">New agent</h3>
+        <div className="border border-hairline bg-surface p-5 mb-6">
+          <h3 className="text-lg mb-4">New Agent</h3>
           <div className="grid grid-cols-2 gap-4">
             <input
               placeholder="Agent name"
               value={newAgent.name}
               onChange={(e) => setNewAgent({ ...newAgent, name: e.target.value })}
-              className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-white"
+              className="px-3 py-2 border border-hairline bg-background text-foreground text-sm focus:outline-none focus:ring-1 focus:ring-ring"
             />
             <input
               placeholder="Ed25519 public key (base64)"
               value={newAgent.public_key}
               onChange={(e) => setNewAgent({ ...newAgent, public_key: e.target.value })}
-              className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-white"
+              className="px-3 py-2 border border-hairline bg-background text-foreground text-sm focus:outline-none focus:ring-1 focus:ring-ring"
             />
           </div>
           <div className="flex gap-2 mt-4">
-            <button onClick={createAgent} className="px-4 py-2 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-lg text-sm font-medium hover:bg-gray-800 dark:hover:bg-gray-100">
-              Create
+            <button onClick={createAgent} className="px-4 py-2 bg-primary text-primary-foreground rounded-full text-sm font-medium hover:opacity-90">
+              Create Agent
             </button>
-            <button onClick={() => setShowCreate(false)} className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800">
+            <button onClick={() => setShowCreate(false)} className="px-4 py-2 border border-hairline text-sm text-muted-foreground hover:bg-surface">
               Cancel
             </button>
           </div>
@@ -84,54 +83,64 @@ export default function AgentsPage() {
 
       <div className="mb-4">
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <input
             placeholder="Search agents..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-9 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-white"
+            className="w-full pl-9 pr-3 py-2 border border-hairline bg-background text-foreground text-sm focus:outline-none focus:ring-1 focus:ring-ring"
           />
         </div>
       </div>
 
       {loading ? (
-        <TableSkeleton />
+        <div className="border border-hairline bg-surface p-8 text-center text-muted-foreground">Loading…</div>
       ) : filtered.length === 0 ? (
-        <div className="text-center py-16 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl">
-          <p className="text-gray-500 dark:text-gray-400">No agents registered yet. Create your first agent to get started.</p>
+        <div className="border border-hairline bg-surface p-16 text-center">
+          <p className="text-muted-foreground">You haven&apos;t registered any agents yet. Create your first agent to get a public key and start issuing tokens.</p>
         </div>
       ) : (
-        <div className="space-y-3">
-          {filtered.map((agent) => (
-            <div key={agent.id} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-5 flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <div className="w-10 h-10 rounded-lg bg-gray-100 dark:bg-gray-700 flex items-center justify-center">
-                  <span className="text-lg">🤖</span>
-                </div>
-                <div>
-                  <div className="font-medium text-gray-900 dark:text-white">{agent.name}</div>
-                  <div className="text-xs text-gray-400 dark:text-gray-500 font-mono">{agent.id}</div>
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <span className={`text-xs px-2 py-1 rounded-full ${
-                  agent.status === 'active'
-                    ? 'bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-400'
-                    : 'bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-400'
-                }`}>
-                  {agent.status}
-                </span>
-                <button className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" title="Rotate key">
-                  <RotateCw className="w-4 h-4 text-gray-400" />
-                </button>
-                {agent.status === 'active' && (
-                  <button onClick={() => revokeAgent(agent.id)} className="p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors" title="Revoke">
-                    <Ban className="w-4 h-4 text-red-400" />
-                  </button>
-                )}
-              </div>
-            </div>
-          ))}
+        <div className="overflow-hidden border border-hairline bg-hairline">
+          <table className="w-full">
+            <thead>
+              <tr className="bg-surface">
+                <th className="text-left px-4 py-3 text-xs eyebrow">Name</th>
+                <th className="text-left px-4 py-3 text-xs eyebrow">Status</th>
+                <th className="text-left px-4 py-3 text-xs eyebrow">Approval Mode</th>
+                <th className="text-left px-4 py-3 text-xs eyebrow">Created</th>
+                <th className="text-right px-4 py-3 text-xs eyebrow">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((agent) => (
+                <tr key={agent.id} className="bg-background rule-x">
+                  <td className="px-4 py-3">
+                    <Link href={`/dashboard/agents/${agent.id}`} className="text-sm font-medium hover:underline">{agent.name}</Link>
+                    <div className="text-xs text-muted-foreground font-mono">{agent.id?.substring(0, 8)}…</div>
+                  </td>
+                  <td className="px-4 py-3">
+                    <span className={`text-xs px-2 py-1 ${agent.status === 'active' ? 'bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-400'}`}>
+                      {agent.status}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-sm text-muted-foreground">{agent.approval_mode_override || 'Org default'}</td>
+                  <td className="px-4 py-3 text-sm text-muted-foreground">{new Date(agent.created_at).toLocaleDateString()}</td>
+                  <td className="px-4 py-3 text-right">
+                    <div className="flex items-center justify-end gap-2">
+                      <button className="p-1.5 hover:bg-surface transition-colors" title="Rotate key">
+                        <RotateCw className="w-4 h-4 text-muted-foreground" />
+                      </button>
+                      {agent.status === 'active' && (
+                        <button onClick={() => revokeAgent(agent.id)} className="p-1.5 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors" title="Revoke">
+                          <Ban className="w-4 h-4 text-destructive" />
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
     </div>

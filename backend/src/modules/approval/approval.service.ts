@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 import { PendingApproval, Agent, Organization } from '../../database/entities';
 import { AuditService } from '../audit/audit.service';
 import { IdentityService } from '../identity/identity.service';
+import { KnockService } from '../notifications/knock.service';
 
 @Injectable()
 export class ApprovalService {
@@ -16,6 +17,7 @@ export class ApprovalService {
     private orgRepo: Repository<Organization>,
     private auditService: AuditService,
     private identityService: IdentityService,
+    private knockService: KnockService,
   ) {}
 
   async create(agentId: string, action: string, resource: string, context?: any): Promise<PendingApproval> {
@@ -112,10 +114,15 @@ export class ApprovalService {
   }
 
   private async sendApprovalNotification(approval: PendingApproval, agent: Agent): Promise<void> {
-    const knockKey = process.env.KNOCK_API_KEY;
-    if (!knockKey) return; // Skip if Knock not configured
-    // In production, use the Knock SDK to send approval notifications
-    // This is a placeholder for the integration
-    this.logger.debug(`Would send Knock notification for approval ${approval.id}`);
+    if (!this.knockService.isConfigured) return;
+
+    await this.knockService.triggerApprovalRequest({
+      recipientId: 'org-admin', // TODO: look up actual org admin user IDs
+      approvalId: approval.id,
+      agentId: agent.id,
+      action: approval.action,
+      resource: approval.resource,
+      orgId: agent.org_id,
+    });
   }
 }

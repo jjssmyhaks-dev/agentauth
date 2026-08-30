@@ -2,7 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { AuditService } from './audit.service';
-import { AuditLog } from '../../database/entities';
+import { AuditLog, Agent, AgentUsage } from '../../database/entities';
 
 describe('AuditService', () => {
   let service: AuditService;
@@ -19,6 +19,24 @@ describe('AuditService', () => {
             save: jest.fn(),
             findOne: jest.fn(),
             createQueryBuilder: jest.fn(),
+          },
+        },
+        {
+          provide: getRepositoryToken(Agent),
+          useValue: {
+            find: jest.fn(),
+            findOne: jest.fn(),
+            update: jest.fn(),
+            save: jest.fn(),
+          },
+        },
+        {
+          provide: getRepositoryToken(AgentUsage),
+          useValue: {
+            find: jest.fn(),
+            findOne: jest.fn(),
+            save: jest.fn(),
+            create: jest.fn((d: any) => d),
           },
         },
       ],

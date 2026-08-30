@@ -36,15 +36,15 @@ export default function ActivityPage() {
     <div className="animate-fade-in">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-xl font-semibold text-gray-900 dark:text-white">Audit Log</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Tamper-evident log of all agent activity.</p>
+          <h1 className="text-2xl">Audit Log</h1>
+          <p >Tamper-evident log of all agent activity.</p>
         </div>
         <div className="flex gap-2">
-          <button onClick={verifyChain} className="flex items-center gap-2 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+          <button onClick={verifyChain} className="flex items-center gap-2 px-3 py-2 border border-hairline text-sm text-muted-foreground hover:bg-surface transition-colors">
             <ShieldCheck className="w-4 h-4" />
             Verify chain
           </button>
-          <button className="flex items-center gap-2 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+          <button className="flex items-center gap-2 px-3 py-2 border border-hairline text-sm text-muted-foreground hover:bg-surface transition-colors">
             <Download className="w-4 h-4" /> Export
           </button>
         </div>
@@ -59,8 +59,8 @@ export default function ActivityPage() {
       <div className="flex gap-2 mb-4">
         {['', 'allowed', 'denied', 'pending'].map((f) => (
           <button key={f} onClick={() => { setResultFilter(f); setPage(1); }}
-            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-              resultFilter === f ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400'
+            className={`px-3 py-1.5 text-sm font-medium transition-colors ${
+              resultFilter === f ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-surface'
             }`}>
             {f || 'All'}
           </button>
@@ -68,11 +68,11 @@ export default function ActivityPage() {
       </div>
 
       {loading ? <TableSkeleton /> : logs.length === 0 ? (
-        <div className="text-center py-16 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl">
-          <p className="text-gray-500 dark:text-gray-400">No audit entries yet.</p>
+        <div className="border border-hairline bg-surface p-16 text-center">
+          <p className="text-muted-foreground">No audit entries yet.</p>
         </div>
       ) : (
-        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden">
+        <div className="border border-hairline bg-background overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>

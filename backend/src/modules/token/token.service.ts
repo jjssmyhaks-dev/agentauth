@@ -4,7 +4,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as crypto from 'crypto';
 import { v4 as uuidv4 } from 'uuid';
-import { Agent, TokenIssued, Grant } from '../../database/entities';
+import { Agent, TokenIssued, Grant, AgentUsage } from '../../database/entities';
 import { IdentityService } from '../identity/identity.service';
 import { RedisService } from '../../common/redis/redis.service';
 
@@ -24,6 +24,10 @@ export class TokenService {
     private jwtService: JwtService,
     private identityService: IdentityService,
     private redis: RedisService,
+    @InjectRepository(Agent)
+    private agentRepo: Repository<Agent>,
+    @InjectRepository(AgentUsage)
+    private usageRepo: Repository<AgentUsage>,
   ) {
     // Generate or load RSA key pair for JWT signing
     const envPrivKey = process.env.JWT_PRIVATE_KEY;
@@ -73,6 +77,8 @@ export class TokenService {
 
     // Delete used nonce (one-time use)
     await this.redis.deleteNonce(challengeNonce);
+
+    const tokenStartTime = Date.now();
 
     // Verify agent
     const agent = await this.identityService.findOne(agentId);
@@ -129,6 +135,44 @@ export class TokenService {
     });
 
     this.logger.log(`Token issued for agent ${agentId}, jti: ${jti}`);
+
+    // Track latency (running average)
+    try {
+      const tokenLatency = Date.now() - tokenStartTime;
+      await this.agentRepo.query(
+        `UPDATE agents SET avg_latency_ms = CASE WHEN token_count > 0 THEN ((avg_latency_ms * (token_count - 1)) + $1) / token_count ELSE $1 END WHERE id = $2`,
+        [tokenLatency, agentId],
+      );
+    } catch {}
+
+    // Track token usage
+    try {
+      await this.agentRepo.update(agentId, {
+        token_count: () => 'token_count + 1',
+        last_active_at: new Date(),
+      });
+
+      // Upsert hourly usage bucket
+      const hourBucket = new Date();
+      hourBucket.setMinutes(0, 0, 0);
+      const existingUsage = await this.usageRepo.findOne({
+        where: { agent_id: agentId, hour_bucket: hourBucket },
+      });
+      if (existingUsage) {
+        existingUsage.tokens_issued += 1;
+        await this.usageRepo.save(existingUsage);
+      } else {
+        await this.usageRepo.save(this.usageRepo.create({
+          agent_id: agentId,
+          org_id: agent.org_id,
+          hour_bucket: hourBucket,
+          tokens_issued: 1,
+        }));
+      }
+    } catch (err) {
+      this.logger.warn(`Failed to track token usage: ${err}`);
+    }
+
     return { token, expires_at: expiresAt, scopes };
   }
 

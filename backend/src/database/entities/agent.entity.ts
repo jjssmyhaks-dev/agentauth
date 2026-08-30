@@ -34,8 +34,30 @@ export class Agent {
   @Column({ default: 'active' })
   status: 'active' | 'revoked';
 
+  @Column({ default: 'internal' })
+  agent_tier: 'internal' | 'external';
+
   @Column({ nullable: true })
   approval_mode_override: 'autonomous' | 'human_in_the_loop';
+
+  // ── Usage tracking ──
+  @Column({ type: 'int', default: 0 })
+  token_count: number;
+
+  @Column({ type: 'int', default: 0 })
+  total_actions: number;
+
+  @Column('timestamp', { nullable: true })
+  last_active_at: Date;
+
+  @Column({ type: 'int', default: 0 })
+  approval_count: number;
+
+  @Column({ type: 'int', default: 0 })
+  denial_count: number;
+
+  @Column('decimal', { precision: 5, scale: 2, nullable: true })
+  avg_latency_ms: number;
 
   @Column('timestamp', { nullable: true })
   key_rotated_at: Date;

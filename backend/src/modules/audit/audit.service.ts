@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Between, LessThanOrEqual, MoreThanOrEqual } from 'typeorm';
-import { AuditLog } from '../../database/entities';
+import { AuditLog, Agent, AgentUsage } from '../../database/entities';
 import * as crypto from 'crypto';
 
 @Injectable()
@@ -9,6 +9,10 @@ export class AuditService {
   constructor(
     @InjectRepository(AuditLog)
     private auditRepository: Repository<AuditLog>,
+    @InjectRepository(Agent)
+    private agentRepo: Repository<Agent>,
+    @InjectRepository(AgentUsage)
+    private usageRepo: Repository<AgentUsage>,
   ) {}
 
   async logEntry(
@@ -19,6 +23,7 @@ export class AuditService {
     resource: string,
     result: 'allowed' | 'denied' | 'pending',
   ): Promise<AuditLog> {
+    const auditStartTime = Date.now();
     // Get previous entry for hash chaining
     const prevEntry = await this.auditRepository.findOne({
       where: { org_id: orgId },
@@ -56,7 +61,65 @@ export class AuditService {
       hash,
     });
 
-    return this.auditRepository.save(entry);
+    const saved = await this.auditRepository.save(entry);
+
+    // Track latency (running average) for the agent
+    try {
+      if (actorType === 'agent' && actorId) {
+        const auditLatency = Date.now() - auditStartTime;
+        await this.agentRepo.query(
+          `UPDATE agents SET avg_latency_ms = CASE WHEN total_actions > 0 THEN ((avg_latency_ms * (total_actions - 1)) + $1) / total_actions ELSE $1 END WHERE id = $2`,
+          [auditLatency, actorId],
+        );
+      }
+    } catch {}
+
+    // Track action counts and usage
+    try {
+      if (actorType === 'agent' && actorId) {
+        const updates: Record<string, any> = {
+          total_actions: () => 'total_actions + 1',
+          last_active_at: new Date(),
+        };
+        if (result === 'allowed') updates.approval_count = () => 'approval_count + 1';
+        if (result === 'denied') updates.denial_count = () => 'denial_count + 1';
+        await this.agentRepo.update(actorId, updates);
+
+        // Upsert hourly usage bucket
+        const hourBucket = new Date();
+        hourBucket.setMinutes(0, 0, 0);
+        const usageUpdates: Record<string, any> = {};
+        if (result === 'allowed') usageUpdates.actions_allowed = () => 'actions_allowed + 1';
+        if (result === 'denied') usageUpdates.actions_denied = () => 'actions_denied + 1';
+        if (result === 'pending') usageUpdates.actions_pending = () => 'actions_pending + 1';
+
+        if (Object.keys(usageUpdates).length > 0) {
+          const agent = await this.agentRepo.findOne({ where: { id: actorId } });
+          const existingUsage = await this.usageRepo.findOne({
+            where: { agent_id: actorId, hour_bucket: hourBucket },
+          });
+          if (existingUsage) {
+            if (result === 'allowed') existingUsage.actions_allowed += 1;
+            if (result === 'denied') existingUsage.actions_denied += 1;
+            if (result === 'pending') existingUsage.actions_pending += 1;
+            await this.usageRepo.save(existingUsage);
+          } else {
+            await this.usageRepo.save(this.usageRepo.create({
+              agent_id: actorId,
+              org_id: agent?.org_id || orgId,
+              hour_bucket: hourBucket,
+              actions_allowed: result === 'allowed' ? 1 : 0,
+              actions_denied: result === 'denied' ? 1 : 0,
+              actions_pending: result === 'pending' ? 1 : 0,
+            }));
+          }
+        }
+      }
+    } catch (err) {
+      // Don't fail audit logging if usage tracking fails
+    }
+
+    return saved;
   }
 
   async queryLogs(

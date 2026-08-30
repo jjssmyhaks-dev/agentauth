@@ -81,7 +81,7 @@ export class CreateWebhookDto {
 
 export class UpdateOrgSettingsDto {
   @ApiPropertyOptional() @IsOptional() @IsString() name?: string;
-  @ApiPropertyOptional({ enum: ['autonomous', 'human_in_loop'] })
+  @ApiPropertyOptional({ enum: ['autonomous', 'human_in_the_loop'] })
   @IsOptional() @IsEnum(['autonomous', 'human_in_the_loop']) default_approval_mode?: string;
   @ApiPropertyOptional() @IsOptional() token_ttl_minutes?: number;
   @ApiPropertyOptional() @IsOptional() action_overrides?: Record<string, string>;

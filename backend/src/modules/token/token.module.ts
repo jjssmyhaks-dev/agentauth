@@ -1,14 +1,14 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { JwtModule } from '@nestjs/jwt';
-import { TokenIssued, Grant } from '../../database/entities';
+import { TokenIssued, Grant, Agent, AgentUsage } from '../../database/entities';
 import { TokenService } from './token.service';
 import { TokenController } from './token.controller';
 import { IdentityModule } from '../identity/identity.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([TokenIssued, Grant]),
+    TypeOrmModule.forFeature([TokenIssued, Grant, Agent, AgentUsage]),
     JwtModule.register({
       global: true,
       signOptions: { algorithm: 'RS256' },

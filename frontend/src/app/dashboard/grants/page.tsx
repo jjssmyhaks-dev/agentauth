@@ -47,10 +47,10 @@ export default function GrantsPage() {
     <div className="animate-fade-in">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-xl font-semibold text-gray-900 dark:text-white">Grants</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Manage permission grants for your agents.</p>
+          <h1 className="text-2xl">Grants</h1>
+          <p >Manage permission grants for your agents.</p>
         </div>
-        <button onClick={() => setShowCreate(!showCreate)} className="flex items-center gap-2 bg-gray-900 dark:bg-white text-white dark:text-gray-900 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-800 dark:hover:bg-gray-100 transition-colors">
+        <button onClick={() => setShowCreate(!showCreate)} className="flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2 rounded-full text-sm font-medium transition-opacity hover:opacity-90">
           <Plus className="w-4 h-4" /> New grant
         </button>
       </div>
@@ -65,8 +65,8 @@ export default function GrantsPage() {
       </div>
 
       {showCreate && (
-        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-5 mb-6">
-          <h3 className="font-medium text-gray-900 dark:text-white mb-4">New grant</h3>
+        <div className="border border-hairline bg-surface p-5 mb-6">
+          <h3 className="text-lg mb-4">New grant</h3>
           <div className="grid grid-cols-2 gap-4">
             <input placeholder="Resource type (e.g. database)" value={form.resource_type} onChange={(e) => setForm({ ...form, resource_type: e.target.value })} className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-900 text-gray-900 dark:text-white" />
             <input placeholder="Resource pattern (e.g. users/*)" value={form.resource_pattern} onChange={(e) => setForm({ ...form, resource_pattern: e.target.value })} className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-900 text-gray-900 dark:text-white" />
@@ -74,26 +74,26 @@ export default function GrantsPage() {
             <input placeholder="Usage cap (optional)" value={form.usage_cap} onChange={(e) => setForm({ ...form, usage_cap: e.target.value })} className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-900 text-gray-900 dark:text-white" />
           </div>
           <div className="flex gap-2 mt-4">
-            <button onClick={createGrant} className="px-4 py-2 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-lg text-sm font-medium">Create</button>
-            <button onClick={() => setShowCreate(false)} className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-600 dark:text-gray-400">Cancel</button>
+            <button onClick={createGrant} className="px-4 py-2 bg-primary text-primary-foreground rounded-full text-sm font-medium hover:opacity-90">Create</button>
+            <button onClick={() => setShowCreate(false)} className="px-4 py-2 border border-hairline text-sm text-muted-foreground hover:bg-surface">Cancel</button>
           </div>
         </div>
       )}
 
       {!agentId ? (
-        <div className="text-center py-16 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl">
-          <p className="text-gray-500 dark:text-gray-400">Enter an agent ID above to view its grants.</p>
+        <div className="border border-hairline bg-surface p-16 text-center">
+          <p className="text-muted-foreground">Enter an agent ID above to view its grants.</p>
         </div>
       ) : loading ? (
         <TableSkeleton />
       ) : grants.length === 0 ? (
-        <div className="text-center py-16 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl">
-          <p className="text-gray-500 dark:text-gray-400">No grants found for this agent.</p>
+        <div className="border border-hairline bg-surface p-16 text-center">
+          <p className="text-muted-foreground">No grants found for this agent.</p>
         </div>
       ) : (
         <div className="space-y-3">
           {grants.map((grant) => (
-            <div key={grant.id} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-5 flex items-center justify-between">
+            <div key={grant.id} className="bg-background border border-hairline p-5 flex items-center justify-between">
               <div>
                 <div className="font-medium text-gray-900 dark:text-white">{grant.resource_type}:{grant.resource_pattern}</div>
                 <div className="flex gap-1 mt-1">

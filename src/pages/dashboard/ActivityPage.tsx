@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -7,6 +7,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useDashboard } from "@/context/DashboardContext";
 import { Search, Download, ShieldCheck, Bot, User, Key } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import DataTable, { type Column } from "@/components/DataTable";
+import type { AuditEntry } from "@/types";
 
 export default function ActivityPage() {
   const { auditLog } = useDashboard();
@@ -15,12 +17,58 @@ export default function ActivityPage() {
   const [search, setSearch] = useState("");
   const [verified, setVerified] = useState<boolean | null>(null);
 
-  const filtered = auditLog.filter((e) => {
+  const filtered = useMemo(() => auditLog.filter((e) => {
     if (actorFilter !== "all" && e.actorType !== actorFilter) return false;
     if (resultFilter !== "all" && e.result !== resultFilter) return false;
     if (search && !e.actor.toLowerCase().includes(search.toLowerCase()) && !e.action.toLowerCase().includes(search.toLowerCase()) && !e.resource.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
-  });
+  }), [auditLog, actorFilter, resultFilter, search]);
+
+  const columns: Column<AuditEntry>[] = [
+    {
+      id: "timestamp",
+      header: "Timestamp",
+      sortable: true,
+      render: (e) => <span className="whitespace-nowrap text-xs text-muted-foreground">{new Date(e.timestamp).toLocaleString()}</span>,
+    },
+    {
+      id: "actor",
+      header: "Actor",
+      sortable: true,
+      render: (e) => (
+        <div className="flex items-center gap-2">
+          {e.actorType === "agent" ? <Bot className="h-3.5 w-3.5 text-blue-500" /> : e.actorType === "user" ? <User className="h-3.5 w-3.5 text-green-500" /> : <Key className="h-3.5 w-3.5 text-purple-500" />}
+          <span>{e.actor}</span>
+        </div>
+      ),
+    },
+    {
+      id: "action",
+      header: "Action",
+      sortable: true,
+      render: (e) => <span className="text-muted-foreground">{e.action}</span>,
+    },
+    {
+      id: "resource",
+      header: "Resource",
+      render: (e) => <span className="font-mono text-xs text-muted-foreground">{e.resourceType}/{e.resource}</span>,
+    },
+    {
+      id: "result",
+      header: "Result",
+      sortable: true,
+      render: (e) => (
+        <Badge variant={e.result === "allowed" || e.result === "issued" ? "success" : e.result === "denied" || e.result === "revoked" ? "destructive" : "warning"}>
+          {e.result}
+        </Badge>
+      ),
+    },
+    {
+      id: "hash",
+      header: "Hash",
+      render: (e) => <span className="font-mono text-xs text-muted-foreground max-w-[120px] truncate cursor-pointer block" title={e.hash}>{e.hash}</span>,
+    },
+  ];
 
   const handleExport = () => {
     const csv = "Timestamp,Actor,Action,Resource,Result,Hash\n" + filtered.map((e) => `${e.timestamp},${e.actor},${e.action},${e.resourceType}/${e.resource},${e.result},${e.hash}`).join("\n");
@@ -42,7 +90,7 @@ export default function ActivityPage() {
       <AnimatePresence>
         {verified !== null && (
           <motion.div initial={{ opacity: 0, y: -8, height: 0 }} animate={{ opacity: 1, y: 0, height: "auto" }} exit={{ opacity: 0, y: -8, height: 0 }}>
-            <Card className="border-green-200 bg-green-50"><CardContent className="p-4 flex items-center gap-3"><ShieldCheck className="h-5 w-5 text-green-600" /><span className="text-sm text-green-700">Chain verified. All {auditLog.length} entries are intact and unaltered.</span></CardContent></Card>
+            <Card className="border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950/30"><CardContent className="p-4 flex items-center gap-3"><ShieldCheck className="h-5 w-5 text-green-600 dark:text-green-400" /><span className="text-sm text-green-700 dark:text-green-300">Chain verified. All {auditLog.length} entries are intact and unaltered.</span></CardContent></Card>
           </motion.div>
         )}
       </AnimatePresence>
@@ -52,39 +100,15 @@ export default function ActivityPage() {
         <Select value={resultFilter} onValueChange={setResultFilter}><SelectTrigger className="w-36 rounded-xl border-hairline bg-background"><SelectValue placeholder="Result" /></SelectTrigger><SelectContent className="border-hairline bg-surface"><SelectItem value="all">All Results</SelectItem><SelectItem value="allowed">Allowed</SelectItem><SelectItem value="denied">Denied</SelectItem><SelectItem value="pending">Pending</SelectItem><SelectItem value="issued">Issued</SelectItem><SelectItem value="revoked">Revoked</SelectItem></SelectContent></Select>
       </motion.div>
       <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.15 }}>
-        <Card className="border-hairline bg-surface/60">
+        <Card className="border-hairline bg-surface/60 dark:bg-surface/40">
           <CardContent className="p-0">
-            {filtered.length === 0 ? (
-              <p className="py-12 text-center text-sm text-muted-foreground">Audit events will appear here as your agents take action.</p>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead><tr className="border-b border-hairline text-left">
-                    <th className="p-4 eyebrow">Timestamp</th><th className="p-4 eyebrow">Actor</th><th className="p-4 eyebrow">Action</th><th className="p-4 eyebrow">Resource</th><th className="p-4 eyebrow">Result</th><th className="p-4 eyebrow">Hash</th>
-                  </tr></thead>
-                  <tbody className="divide-y divide-hairline/50">
-                    <AnimatePresence>
-                      {filtered.map((e, i) => (
-                        <motion.tr
-                          key={e.id}
-                          initial={{ opacity: 0 }}
-                          animate={{ opacity: 1 }}
-                          transition={{ duration: 0.2, delay: Math.min(i * 0.02, 0.3) }}
-                          className="hover:bg-foreground/[0.02] transition-colors"
-                        >
-                          <td className="p-4 whitespace-nowrap text-xs text-muted-foreground">{new Date(e.timestamp).toLocaleString()}</td>
-                          <td className="p-4"><div className="flex items-center gap-2">{e.actorType === "agent" ? <Bot className="h-3.5 w-3.5 text-blue-500" /> : e.actorType === "user" ? <User className="h-3.5 w-3.5 text-green-500" /> : <Key className="h-3.5 w-3.5 text-purple-500" />}<span>{e.actor}</span></div></td>
-                          <td className="p-4 text-muted-foreground">{e.action}</td>
-                          <td className="p-4 font-mono text-xs text-muted-foreground">{e.resourceType}/{e.resource}</td>
-                          <td className="p-4"><Badge variant={e.result === "allowed" || e.result === "issued" ? "success" : e.result === "denied" || e.result === "revoked" ? "destructive" : "warning"}>{e.result}</Badge></td>
-                          <td className="p-4 font-mono text-xs text-muted-foreground max-w-[120px] truncate cursor-pointer" title={e.hash}>{e.hash}</td>
-                        </motion.tr>
-                      ))}
-                    </AnimatePresence>
-                  </tbody>
-                </table>
-              </div>
-            )}
+            <DataTable
+              columns={columns}
+              data={filtered}
+              keyExtractor={(e) => e.id}
+              pageSize={15}
+              emptyMessage="Audit events will appear here as your agents take action."
+            />
           </CardContent>
         </Card>
       </motion.div>

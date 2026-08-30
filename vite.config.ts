@@ -15,4 +15,8 @@ export default defineConfig({
     port: Number(process.env.PORT) || 5173,
     hmr: false,
   },
+  build: {
+    target: "es2020",
+    sourcemap: false,
+  },
 });

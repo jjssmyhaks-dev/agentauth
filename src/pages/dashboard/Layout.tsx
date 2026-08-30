@@ -10,11 +10,15 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { useAuth } from "@/context/AuthContext";
 import { useDashboard } from "@/context/DashboardContext";
 import { useNotifications } from "@/context/NotificationContext";
+import { useTheme } from "@/context/ThemeContext";
 import { useNotificationSimulator } from "@/hooks/useNotificationSimulator";
 import NotificationPanel from "@/components/NotificationPanel";
 import ToastContainer from "@/components/ToastContainer";
+import CommandPalette from "@/components/CommandPalette";
+import ShortcutsHelp from "@/components/ShortcutsHelp";
 import { motion, AnimatePresence } from "framer-motion";
 import { useState, useRef, useCallback } from "react";
+import { Sun, Moon, Monitor } from "lucide-react";
 import OnboardingWizard from "./OnboardingWizard"
 
 const navItems = [
@@ -35,8 +39,13 @@ export default function DashboardLayout() {
   const { user, signOut } = useAuth();
   const { pendingApprovals } = useDashboard();
   const { unreadCount } = useNotifications();
+  const { theme, setTheme } = useTheme();
   const location = useLocation();
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(() => {
+    if (typeof window !== "undefined") return window.innerWidth >= 768;
+    return true;
+  });
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(() => {
     return !localStorage.getItem("aa_onboarding_complete");
   });
@@ -59,9 +68,14 @@ export default function DashboardLayout() {
   }
 
   return (
-    <div className="flex h-screen bg-background">
+    <div className="flex h-screen bg-background overflow-hidden">
+      {/* Mobile overlay */}
+      {mobileMenuOpen && (
+        <div className="fixed inset-0 z-40 bg-foreground/20 backdrop-blur-sm md:hidden" onClick={() => setMobileMenuOpen(false)} />
+      )}
+
       {/* Sidebar */}
-      <aside className={`${sidebarOpen ? "w-60" : "w-14"} flex shrink-0 flex-col border-r border-hairline bg-surface/50 transition-all duration-200`}>
+      <aside className={`${mobileMenuOpen ? "translate-x-0" : "-translate-x-full"} fixed inset-y-0 left-0 z-50 w-60 flex shrink-0 flex-col border-r border-hairline bg-surface transition-transform duration-200 md:relative md:translate-x-0 ${sidebarOpen ? "md:w-60" : "md:w-14"}`}>
         <div className="flex h-14 items-center justify-between border-b border-hairline px-4">
           {sidebarOpen && (
             <Link to="/" className="flex items-center gap-2">
@@ -69,8 +83,8 @@ export default function DashboardLayout() {
               <span className="text-sm font-medium">AgentAuth</span>
             </Link>
           )}
-          <button onClick={() => setSidebarOpen(!sidebarOpen)} className="rounded-md p-1 text-muted-foreground hover:text-foreground transition-colors">
-            {sidebarOpen ? <ChevronLeft className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
+          <button onClick={() => { if (window.innerWidth < 768) setMobileMenuOpen(!mobileMenuOpen); else setSidebarOpen(!sidebarOpen); }} className="rounded-md p-1 text-muted-foreground hover:text-foreground transition-colors">
+            {sidebarOpen && window.innerWidth >= 768 ? <ChevronLeft className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
           </button>
         </div>
         <ScrollArea className="flex-1 py-3">
@@ -103,13 +117,24 @@ export default function DashboardLayout() {
 
       {/* Main */}
       <div className="flex flex-1 flex-col overflow-hidden">
-        <header className="flex h-14 shrink-0 items-center justify-between border-b border-hairline bg-surface/30 px-6 backdrop-blur-sm">
-          <div className="relative">
+        <header className="flex h-14 shrink-0 items-center justify-between border-b border-hairline bg-surface/30 px-4 sm:px-6 backdrop-blur-sm">
+          {/* Mobile menu button */}
+          <button onClick={() => setMobileMenuOpen(true)} className="rounded-md p-2 text-muted-foreground hover:text-foreground md:hidden">
+            <Menu className="h-5 w-5" />
+          </button>
+          <div className="relative hidden sm:block">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <input type="text" placeholder="Search agents, grants, logs..."
               className="h-9 w-80 rounded-full border border-hairline bg-background pl-9 pr-3 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring" />
           </div>
-          <div className="relative flex items-center gap-3">
+          <div className="relative flex items-center gap-1 sm:gap-3">
+            <button
+              onClick={() => setTheme(theme === "dark" ? "light" : theme === "light" ? "system" : "dark")}
+              className="rounded-full p-2 text-muted-foreground hover:text-foreground hover:bg-foreground/5 transition-colors"
+              title={`Theme: ${theme}`}
+            >
+              {theme === "dark" ? <Moon className="h-4 w-4" /> : theme === "light" ? <Sun className="h-4 w-4" /> : <Monitor className="h-4 w-4" />}
+            </button>
             <button ref={bellRef} onClick={toggleNotifPanel} className="relative rounded-full p-2 text-muted-foreground hover:text-foreground hover:bg-foreground/5 transition-colors">
               <Bell className="h-4 w-4" />
               {unreadCount > 0 && (
@@ -123,11 +148,11 @@ export default function DashboardLayout() {
               <Avatar className="h-8 w-8">
                 <AvatarFallback className="bg-muted text-xs">{user?.name?.charAt(0).toUpperCase() || "U"}</AvatarFallback>
               </Avatar>
-              <span className="text-sm">{user?.name || "User"}</span>
+              <span className="text-sm hidden sm:inline">{user?.name || "User"}</span>
             </div>
           </div>
         </header>
-        <main className="flex-1 overflow-auto p-6">
+        <main className="flex-1 overflow-auto p-4 sm:p-6">
           <AnimatePresence mode="wait">
             <motion.div
               key={location.pathname}
@@ -142,6 +167,8 @@ export default function DashboardLayout() {
         </main>
       </div>
       <ToastContainer />
+      <CommandPalette />
+      <ShortcutsHelp />
     </div>
   );
 }

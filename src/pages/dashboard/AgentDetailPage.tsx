@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
 import { ArrowLeft, Shield, Key, Activity, AlertTriangle, CheckCircle2, TrendingUp, TrendingDown, Minus } from "lucide-react";
+import TrustGauge, { type TrustGaugeProps } from "@/components/TrustGauge";
+import Sparkline from "@/components/Sparkline";
 
 export default function AgentDetailPage() {
   const { id } = useParams();
@@ -24,16 +26,19 @@ export default function AgentDetailPage() {
         <div className="flex-1"><div className="flex items-center gap-3"><h1 className="text-2xl font-serif">{agent.name}</h1><Badge variant={agent.status === "active" ? "success" : "destructive"}>{agent.status}</Badge><Badge variant={agent.approvalMode === "autonomous" ? "info" : "secondary"}>{agent.approvalMode === "autonomous" ? "Autonomous" : "HITL"}</Badge></div><p className="mt-1 text-sm text-muted-foreground font-mono">{agent.id}</p></div>
       </div>
 
-      <Card className="border-hairline bg-surface/60">
+      <Card className="border-hairline bg-surface/60 dark:bg-surface/40">
         <CardContent className="p-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className={`flex h-14 w-14 items-center justify-center rounded-xl ${agent.trustScore >= 70 ? "bg-green-100" : agent.trustScore >= 40 ? "bg-amber-100" : "bg-red-100"}`}><Shield className={`h-7 w-7 ${agent.trustScore >= 70 ? "text-green-600" : agent.trustScore >= 40 ? "text-amber-600" : "text-red-600"}`} /></div>
-              <div><p className="eyebrow">Trust Score</p><div className="flex items-center gap-3"><p className="text-3xl font-serif">{agent.trustScore}</p><Badge variant={agent.trustLevel === "trusted" ? "success" : "warning"}>{agent.trustLevel}</Badge></div></div>
+          <div className="flex items-center justify-between flex-wrap gap-6">
+            <div className="flex items-center gap-6">
+              <TrustGauge score={agent.trustScore} level={agent.trustLevel as TrustGaugeProps["level"]} size={100} />
+              <div>
+                <p className="text-sm font-medium">Trust Score</p>
+                <p className="text-xs text-muted-foreground mt-1">Based on behavioral and contextual signals</p>
+                {stats && stats.warnings.length > 0 && <div className="mt-3 space-y-1">{stats.warnings.map((w, i) => (<div key={i} className="flex items-center gap-2 text-xs text-amber-600 dark:text-amber-400"><AlertTriangle className="h-3 w-3" /> {w}</div>))}</div>}
+              </div>
             </div>
-            <div className="w-64"><div className="flex justify-between text-xs text-muted-foreground mb-1"><span>Untrusted</span><span>Trusted</span></div><Progress value={agent.trustScore} className="h-3" /></div>
+            <div className="w-48"><div className="flex justify-between text-xs text-muted-foreground mb-1"><span>Untrusted</span><span>Trusted</span></div><Progress value={agent.trustScore} className="h-2" /></div>
           </div>
-          {stats && stats.warnings.length > 0 && <div className="mt-4 space-y-2">{stats.warnings.map((w, i) => (<div key={i} className="flex items-center gap-2 text-sm text-amber-700"><AlertTriangle className="h-4 w-4" /> {w}</div>))}</div>}
         </CardContent>
       </Card>
 
@@ -42,7 +47,7 @@ export default function AgentDetailPage() {
 
         <TabsContent value="overview" className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-4">
-            {[{ l: "Tokens Issued", v: agent.tokensIssued.toLocaleString(), i: Key, c: "bg-muted" }, { l: "Actions Total", v: agent.actionsTotal.toLocaleString(), i: Activity, c: "bg-muted" }, { l: "Allowed", v: agent.actionsAllowed.toLocaleString(), i: CheckCircle2, c: "bg-green-100" }, { l: "Denied", v: agent.actionsDenied.toLocaleString(), i: AlertTriangle, c: "bg-red-100" }].map((s) => (
+            {[{ l: "Tokens Issued", v: agent.tokensIssued.toLocaleString(), i: Key, c: "bg-muted" }, { l: "Actions Total", v: agent.actionsTotal.toLocaleString(), i: Activity, c: "bg-muted" }, { l: "Allowed", v: agent.actionsAllowed.toLocaleString(), i: CheckCircle2, c: "bg-green-500/15" }, { l: "Denied", v: agent.actionsDenied.toLocaleString(), i: AlertTriangle, c: "bg-red-500/15" }].map((s) => (
               <Card key={s.l} className="border-hairline bg-surface/60"><CardContent className="p-4"><div className="flex items-center gap-2 mb-2"><div className={`flex h-8 w-8 items-center justify-center rounded-lg ${s.c}`}><s.i className="h-4 w-4" /></div><span className="eyebrow">{s.l}</span></div><p className="text-2xl font-serif">{s.v}</p></CardContent></Card>
             ))}
           </div>
@@ -67,7 +72,7 @@ export default function AgentDetailPage() {
             <div className="divide-y divide-hairline/50">
               {agentActivity.slice(0, 10).map((e) => (
                 <div key={e.id} className="flex items-center gap-4 p-4 hover:bg-foreground/[0.02]">
-                  <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${e.result === "allowed" || e.result === "issued" ? "bg-green-100" : "bg-red-100"}`}>{e.result === "allowed" || e.result === "issued" ? <CheckCircle2 className="h-4 w-4 text-green-600" /> : <AlertTriangle className="h-4 w-4 text-red-600" />}</div>
+                  <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${e.result === "allowed" || e.result === "issued" ? "bg-green-500/15" : "bg-red-500/15"}`}>{e.result === "allowed" || e.result === "issued" ? <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" /> : <AlertTriangle className="h-4 w-4 text-red-600 dark:text-red-400" />}</div>
                   <div className="flex-1 min-w-0"><p className="text-sm">{e.action} <span className="text-muted-foreground">{e.resourceType}/{e.resource}</span></p><p className="text-xs text-muted-foreground font-mono">{e.hash}</p></div>
                   <Badge variant={e.result === "allowed" || e.result === "issued" ? "success" : "destructive"}>{e.result}</Badge>
                   <span className="text-xs text-muted-foreground">{new Date(e.timestamp).toLocaleTimeString()}</span>

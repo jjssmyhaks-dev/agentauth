@@ -1,6 +1,8 @@
 import { Link } from "react-router-dom";
 import { useEffect, useState, useRef, type ReactNode } from "react";
 import { motion, useInView, useScroll, useTransform, AnimatePresence } from "framer-motion";
+import { useTheme } from "@/context/ThemeContext";
+import { Sun, Moon } from "lucide-react";
 
 /* ── Content ─────────────────────────────────────────────────────────── */
 const c = {
@@ -172,7 +174,7 @@ function ActivityFeed() {
             >
               <span className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${item.result === "allowed" ? "bg-green-500" : item.result === "pending" ? "bg-amber-500" : "bg-red-500"}`} />
               <span className="truncate"><span className="font-medium">{item.agent}</span> <span className="text-muted-foreground">{item.action}</span> <span className="text-muted-foreground font-mono text-xs">{item.resource}</span></span>
-              <span className={`ml-auto shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${item.result === "allowed" ? "bg-green-100 text-green-700" : item.result === "pending" ? "bg-amber-100 text-amber-700" : "bg-red-100 text-red-700"}`}>{item.result}</span>
+              <span className={`ml-auto shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${item.result === "allowed" ? "bg-green-500/15 text-green-600 dark:text-green-400" : item.result === "pending" ? "bg-amber-500/15 text-amber-600 dark:text-amber-400" : "bg-red-500/15 text-red-600 dark:text-red-400"}`}>{item.result}</span>
             </motion.div>
           ))}
         </AnimatePresence>
@@ -197,7 +199,8 @@ function Counter({ target, label }: { target: number; label: string }) {
     const step = (ts: number) => { if (!start) start = ts; const p = Math.min((ts - start) / 1200, 1); setCount(Math.floor(p * target)); if (p < 1) requestAnimationFrame(step); };
     requestAnimationFrame(step);
   }, [visible, target]);
-  return <div ref={ref} className="text-center"><div className="text-3xl sm:text-4xl font-serif tabular-nums">{count.toLocaleString()}</div><div className="mt-1 text-xs text-muted-foreground">{label}</div></div>;
+  const display = target % 1 !== 0 ? count.toFixed(2) : count.toLocaleString();
+  return <div ref={ref} className="text-center"><div className="text-3xl sm:text-4xl font-serif tabular-nums">{display}</div><div className="mt-1 text-xs text-muted-foreground">{label}</div></div>;
 }
 
 /* ── Animated auth flow diagram ──────────────────────────────────────── */
@@ -364,10 +367,88 @@ function FAQItem({ item }: { item: { q: string; a: string } }) {
   );
 }
 
+/* ── Interactive Terminal ────────────────────────────────────────────── */
+const terminalLines = [
+  { type: "input", text: "$ agentauth agents create --name \"Code Review Bot\"" },
+  { type: "output", text: "✓ Agent created: ag_x7k2m9p" },
+  { type: "output", text: "  Public key: ed25519_pk_a1b2c3d4e5f6..." },
+  { type: "input", text: "$ agentauth tokens request --agent ag_x7k2m9p" },
+  { type: "output", text: "✓ Token issued (expires in 10min)" },
+  { type: "input", text: "$ agentauth permissions check --action read --resource db/customers" },
+  { type: "output", text: "✓ Allowed — grant gr_8n2k matched" },
+  { type: "input", text: "$ agentauth actions submit --action delete --resource db/customers/123" },
+  { type: "output-pending", text: "⏳ Pending approval — waiting for human review..." },
+  { type: "output-approved", text: "✓ Approved by admin@acme.com" },
+  { type: "output", text: "✓ Action executed successfully" },
+];
+
+function InteractiveTerminal() {
+  const [visibleLines, setVisibleLines] = useState(0);
+  const [started, setStarted] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!started) return;
+    if (visibleLines >= terminalLines.length) return;
+    const delay = terminalLines[visibleLines]?.type.startsWith("input") ? 800 : 400;
+    const t = setTimeout(() => setVisibleLines((v) => v + 1), delay);
+    return () => clearTimeout(t);
+  }, [visibleLines, started]);
+
+  useEffect(() => {
+    if (ref.current) ref.current.scrollTop = ref.current.scrollHeight;
+  }, [visibleLines]);
+
+  return (
+    <div className="rounded-2xl border border-hairline bg-surface/60 overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-hairline">
+        <div className="flex items-center gap-2">
+          <span className="inline-block h-2.5 w-2.5 rounded-full bg-muted" />
+          <span className="inline-block h-2.5 w-2.5 rounded-full bg-muted" />
+          <span className="inline-block h-2.5 w-2.5 rounded-full bg-muted" />
+          <span className="ml-2 text-xs text-muted-foreground font-mono">terminal</span>
+        </div>
+        {!started && (
+          <button onClick={() => { setStarted(true); setVisibleLines(1); }} className="rounded-full bg-foreground px-3 py-1 text-xs text-primary-foreground font-medium hover:opacity-90 transition-opacity">
+            Run demo
+          </button>
+        )}
+        {started && visibleLines >= terminalLines.length && (
+          <button onClick={() => { setVisibleLines(0); setStarted(false); }} className="rounded-full border border-hairline px-3 py-1 text-xs text-muted-foreground hover:text-foreground transition-colors">
+            Replay
+          </button>
+        )}
+      </div>
+      <div ref={ref} className="p-4 font-mono text-xs leading-relaxed h-72 overflow-y-auto">
+        {visibleLines === 0 && !started && (
+          <div className="flex h-full items-center justify-center text-muted-foreground">
+            Click "Run demo" to see the SDK in action
+          </div>
+        )}
+        {terminalLines.slice(0, visibleLines).map((line, i) => (
+          <motion.div
+            key={i}
+            initial={{ opacity: 0, x: -4 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.2 }}
+            className={`${line.type === "input" ? "text-foreground" : line.type === "output-pending" ? "text-amber-600 dark:text-amber-400" : line.type === "output-approved" ? "text-green-600 dark:text-green-400" : "text-green-600 dark:text-green-400"}`}
+          >
+            {line.text}
+          </motion.div>
+        ))}
+        {started && visibleLines < terminalLines.length && (
+          <motion.span animate={{ opacity: [1, 0] }} transition={{ duration: 0.6, repeat: Infinity }} className="inline-block h-3.5 w-2 bg-foreground/60" />
+        )}
+      </div>
+    </div>
+  );
+}
+
 /* ── Main ────────────────────────────────────────────────────────────── */
 export default function LandingPage() {
   const { scrollYProgress } = useScroll();
-  const headerBg = useTransform(scrollYProgress, [0, 0.05], ["rgba(237,234,227,0)", "rgba(237,234,227,0.85)"]);
+  const { theme, setTheme, resolvedTheme } = useTheme();
+  const headerBg = useTransform(scrollYProgress, [0, 0.05], ["rgba(0,0,0,0)", resolvedTheme === "dark" ? "rgba(20,20,20,0.85)" : "rgba(237,234,227,0.85)"]);
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -386,6 +467,9 @@ export default function LandingPage() {
             <span className="inline-block h-2 w-2 shrink-0 rounded-full bg-foreground" />AgentAuth
           </Link>
           <div className="flex shrink-0 items-center gap-1 rounded-full bg-surface/60 p-1 shadow-[0_1px_2px_rgba(0,0,0,0.06)] backdrop-blur sm:pl-2">
+            <button onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")} className="rounded-full p-2 text-muted-foreground hover:text-foreground transition-colors" title="Toggle theme">
+              {resolvedTheme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+            </button>
             <Link to="/auth" className="hidden px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground sm:inline-block">Sign In</Link>
             <Link to="/auth" className="whitespace-nowrap rounded-full bg-primary px-3 py-1.5 text-xs text-primary-foreground transition-all hover:opacity-90 hover:shadow-md sm:px-4 sm:text-sm">Get Started</Link>
           </div>
@@ -393,7 +477,7 @@ export default function LandingPage() {
       </motion.header>
 
       {/* Hero */}
-      <section className="mx-auto grid max-w-[100rem] items-center gap-12 px-5 pb-16 pt-28 sm:px-6 sm:pb-24 sm:pt-36 md:grid-cols-2 md:gap-10 md:px-10 md:pt-44 lg:px-16 lg:pt-52">
+      <section className="mx-auto grid max-w-[100rem] items-center gap-8 px-5 pb-16 pt-24 sm:gap-12 sm:px-6 sm:pb-24 sm:pt-36 md:grid-cols-2 md:gap-10 md:px-10 md:pt-44 lg:px-16 lg:pt-52">
         <div>
           <FadeIn delay={0.1}>
             <div className="eyebrow mb-6">{c.hero.eyebrow}</div>
@@ -415,6 +499,18 @@ export default function LandingPage() {
         <FadeIn delay={0.3} y={16} className="-order-1 md:order-none">
           <AuthFlowDiagram />
         </FadeIn>
+      </section>
+
+      {/* Metrics */}
+      <section className="py-12 sm:py-16 border-t border-dashed border-hairline">
+        <div className="mx-auto max-w-[100rem] px-5 sm:px-6 md:px-10 lg:px-16">
+          <StaggerContainer className="flex flex-wrap items-center justify-center gap-8 sm:gap-16 lg:gap-24">
+            <Counter target={12847} label="Agents Protected" />
+            <Counter target={2_400_000} label="Tokens Issued" />
+            <Counter target={99.97} label="Uptime %" />
+            <Counter target={340} label="Teams" />
+          </StaggerContainer>
+        </div>
       </section>
 
       {/* Problem */}
@@ -512,6 +608,22 @@ export default function LandingPage() {
               </div>
               <p className="mt-4 text-xs text-muted-foreground">{c.codeSample.caption} Full docs at <a href="#docs" className="underline hover:text-foreground">docs.agentauth.com</a>.</p>
             </div>
+          </FadeIn>
+        </div>
+      </section>
+
+      {/* Interactive Terminal */}
+      <section className="rule-x">
+        <div className="mx-auto grid max-w-[100rem] gap-10 px-5 py-16 sm:px-6 sm:py-20 md:grid-cols-2 md:px-10 lg:px-16 lg:py-24">
+          <FadeIn>
+            <div>
+              <SectionLabel n="04">Try it</SectionLabel>
+              <h2 className="mt-8 text-[2rem] leading-tight sm:text-3xl lg:text-[2.75rem]">See it in action.</h2>
+              <p className="mt-4 max-w-md text-muted-foreground leading-relaxed">Watch an agent authenticate, check permissions, and get approval — all in real time.</p>
+            </div>
+          </FadeIn>
+          <FadeIn delay={0.15}>
+            <InteractiveTerminal />
           </FadeIn>
         </div>
       </section>

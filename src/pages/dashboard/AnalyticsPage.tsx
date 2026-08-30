@@ -32,7 +32,7 @@ export default function AnalyticsPage() {
 
   const stats = [
     { l: "Total Tokens", v: totalTokens.toLocaleString(), i: Key, c: "bg-muted" },
-    { l: "Success Rate", v: `${successRate}%`, i: CheckCircle2, c: "bg-green-100" },
+    { l: "Success Rate", v: `${successRate}%`, i: CheckCircle2, c: "bg-green-500/15" },
     { l: "Active Agents", v: activeAgents, i: Shield, c: "bg-muted" },
     { l: "Est. Cost", v: `$${estCost}`, i: DollarSign, c: "bg-muted" },
   ];

@@ -1,5 +1,5 @@
 import { useState, useCallback } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -10,11 +10,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useDashboard } from "@/context/DashboardContext";
 import { useNotifications } from "@/context/NotificationContext";
 import { Plus, Search, Shield, Key, Trash2, RotateCcw } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
+import DataTable, { type Column } from "@/components/DataTable";
+import type { Agent } from "@/types";
 
 export default function AgentsPage() {
   const { agents, addAgent, revokeAgent } = useDashboard();
   const { addNotification, pushToast } = useNotifications();
+  const navigate = useNavigate();
   const [search, setSearch] = useState("");
   const [showCreate, setShowCreate] = useState(false);
   const [showRevoke, setShowRevoke] = useState<string | null>(null);
@@ -22,6 +25,62 @@ export default function AgentsPage() {
   const [newMode, setNewMode] = useState<"autonomous" | "human-in-the-loop">("human-in-the-loop");
 
   const filtered = agents.filter((a) => a.name.toLowerCase().includes(search.toLowerCase()));
+
+  const columns: Column<Agent>[] = [
+    {
+      id: "name",
+      header: "Agent",
+      sortable: true,
+      render: (agent) => (
+        <div className="flex items-center gap-3">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-muted"><Shield className="h-4 w-4" /></div>
+          <div>
+            <p className="font-medium">{agent.name}</p>
+            <p className="text-xs text-muted-foreground font-mono">{agent.id.slice(0, 20)}...</p>
+          </div>
+        </div>
+      ),
+    },
+    {
+      id: "status",
+      header: "Status",
+      sortable: true,
+      render: (agent) => (
+        <Badge variant={agent.status === "active" ? "success" : agent.status === "revoked" ? "destructive" : "warning"}>{agent.status}</Badge>
+      ),
+    },
+    {
+      id: "approvalMode",
+      header: "Approval Mode",
+      sortable: true,
+      render: (agent) => (
+        <Badge variant={agent.approvalMode === "autonomous" ? "info" : "secondary"}>{agent.approvalMode === "autonomous" ? "Autonomous" : "HITL"}</Badge>
+      ),
+    },
+    {
+      id: "createdAt",
+      header: "Created",
+      sortable: true,
+      render: (agent) => <span className="text-xs text-muted-foreground">{new Date(agent.createdAt).toLocaleDateString()}</span>,
+    },
+    {
+      id: "lastActiveAt",
+      header: "Last Active",
+      sortable: true,
+      render: (agent) => <span className="text-xs text-muted-foreground">{new Date(agent.lastActiveAt).toLocaleDateString()}</span>,
+    },
+    {
+      id: "actions",
+      header: "",
+      className: "text-right",
+      render: (agent) => (
+        <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+          <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground" title="Rotate Key"><RotateCcw className="h-3.5 w-3.5" /></Button>
+          {agent.status === "active" && <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive" title="Revoke" onClick={() => setShowRevoke(agent.id)}><Trash2 className="h-3.5 w-3.5" /></Button>}
+        </div>
+      ),
+    },
+  ];
 
   const handleCreate = useCallback(() => {
     if (!newName) return;
@@ -34,10 +93,18 @@ export default function AgentsPage() {
       lastActiveAt: new Date().toISOString(), tokensIssued: 0, actionsTotal: 0,
       actionsAllowed: 0, actionsDenied: 0, tier: "free", tags: [],
     });
-    addNotification({ type: "agent", priority: "medium", title: `Agent created: ${newName}`, message: `New ${newMode} agent registered with Ed25519 identity`, actionUrl: `/dashboard/agents` });
+    addNotification({ type: "agent", priority: "medium", title: `Agent created: ${newName}`, message: `New ${newMode} agent registered with Ed25519 identity`, actionUrl: "/dashboard/agents" });
     pushToast({ type: "agent", priority: "low", title: "Agent created", message: newName });
     setNewName(""); setShowCreate(false);
   }, [newName, newMode, addAgent, addNotification, pushToast]);
+
+  const handleBulkRevoke = useCallback((selectedAgents: Agent[]) => {
+    selectedAgents.forEach((a) => {
+      revokeAgent(a.id);
+      addNotification({ type: "agent", priority: "high", title: `Agent revoked: ${a.name}`, message: "All active tokens and grants have been invalidated", agentId: a.id, agentName: a.name, actionUrl: `/dashboard/agents/${a.id}` });
+    });
+    pushToast({ type: "agent", priority: "high", title: "Agents revoked", message: `${selectedAgents.length} agent(s) revoked` });
+  }, [revokeAgent, addNotification, pushToast]);
 
   return (
     <div className="space-y-6">
@@ -49,39 +116,21 @@ export default function AgentsPage() {
       <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.1 }} className="relative"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input placeholder="Search agents..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-10 rounded-xl border-hairline bg-background" /></motion.div>
 
       <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.15 }}>
-        <Card className="border-hairline bg-surface/60">
+        <Card className="border-hairline bg-surface/60 dark:bg-surface/40">
           <CardContent className="p-0">
-            {filtered.length === 0 ? (
-              <p className="py-12 text-center text-sm text-muted-foreground">You haven't registered any agents yet. Create your first agent to get a public key and start issuing tokens.</p>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead><tr className="border-b border-hairline text-left">
-                    <th className="p-4 eyebrow">Agent</th><th className="p-4 eyebrow">Status</th><th className="p-4 eyebrow">Approval Mode</th><th className="p-4 eyebrow">Created</th><th className="p-4 eyebrow">Last Active</th><th className="p-4 eyebrow text-right">Actions</th>
-                  </tr></thead>
-                  <tbody className="divide-y divide-hairline/50">
-                    <AnimatePresence>
-                      {filtered.map((agent, i) => (
-                        <motion.tr
-                          key={agent.id}
-                          initial={{ opacity: 0 }}
-                          animate={{ opacity: 1 }}
-                          transition={{ duration: 0.25, delay: i * 0.03 }}
-                          className="hover:bg-foreground/[0.02] transition-colors"
-                        >
-                          <td className="p-4"><Link to={`/dashboard/agents/${agent.id}`} className="group"><div className="flex items-center gap-3"><div className="flex h-9 w-9 items-center justify-center rounded-xl bg-muted transition-colors group-hover:bg-foreground/10"><Shield className="h-4 w-4" /></div><div><p className="font-medium group-hover:underline">{agent.name}</p><p className="text-xs text-muted-foreground font-mono">{agent.id.slice(0, 20)}...</p></div></div></Link></td>
-                          <td className="p-4"><Badge variant={agent.status === "active" ? "success" : agent.status === "revoked" ? "destructive" : "warning"}>{agent.status}</Badge></td>
-                          <td className="p-4"><Badge variant={agent.approvalMode === "autonomous" ? "info" : "secondary"}>{agent.approvalMode === "autonomous" ? "Autonomous" : "HITL"}</Badge></td>
-                          <td className="p-4 text-xs text-muted-foreground">{new Date(agent.createdAt).toLocaleDateString()}</td>
-                          <td className="p-4 text-xs text-muted-foreground">{new Date(agent.lastActiveAt).toLocaleDateString()}</td>
-                          <td className="p-4 text-right"><div className="flex items-center justify-end gap-1"><Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground" title="Rotate Key"><RotateCcw className="h-3.5 w-3.5" /></Button>{agent.status === "active" && <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive" title="Revoke" onClick={() => setShowRevoke(agent.id)}><Trash2 className="h-3.5 w-3.5" /></Button>}</div></td>
-                        </motion.tr>
-                      ))}
-                    </AnimatePresence>
-                  </tbody>
-                </table>
-              </div>
-            )}
+            <DataTable
+              columns={columns}
+              data={filtered}
+              keyExtractor={(a) => a.id}
+              onRowClick={(a) => navigate(`/dashboard/agents/${a.id}`)}
+              pageSize={10}
+              emptyMessage="You haven't registered any agents yet. Create your first agent to get a public key and start issuing tokens."
+              bulkActions={(selected) => (
+                <Button variant="destructive" size="sm" className="rounded-full text-xs" onClick={() => handleBulkRevoke(selected)}>
+                  <Trash2 className="mr-1 h-3 w-3" /> Revoke Selected
+                </Button>
+              )}
+            />
           </CardContent>
         </Card>
       </motion.div>

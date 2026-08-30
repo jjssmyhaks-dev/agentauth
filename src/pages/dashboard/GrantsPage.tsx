@@ -8,7 +8,8 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useDashboard } from "@/context/DashboardContext";
 import { useNotifications } from "@/context/NotificationContext";
-import { Plus, Search, KeyRound } from "lucide-react"
+import { Plus, Search, KeyRound } from "lucide-react";
+import EmptyState from "@/components/EmptyState"
 
 export default function GrantsPage() {
   const { grants, agents, addGrant, revokeGrant } = useDashboard();
@@ -57,7 +58,12 @@ export default function GrantsPage() {
       <Card className="border-hairline bg-surface/60">
         <CardContent className="p-0">
           {filtered.length === 0 ? (
-            <p className="py-12 text-center text-sm text-muted-foreground">No grants configured. Grants define exactly what each agent can access — nothing is allowed by default.</p>
+            <EmptyState
+              icon={KeyRound}
+              title="No grants configured"
+              description="Grants define exactly what each agent can access — nothing is allowed by default. Create your first grant to get started."
+              action={<Button onClick={() => setShowCreate(true)} className="rounded-full bg-primary text-primary-foreground hover:opacity-90"><Plus className="mr-2 h-4 w-4" /> Create Grant</Button>}
+            />
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">

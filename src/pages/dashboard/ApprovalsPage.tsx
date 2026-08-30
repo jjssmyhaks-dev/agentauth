@@ -105,9 +105,8 @@ export default function ApprovalsPage() {
                             initial={{ scale: 0.8 }}
                             animate={{ scale: 1 }}
                             transition={{ duration: 0.3, delay: i * 0.04 + 0.1 }}
-                            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${a.status === "pending" ? "bg-amber-100" : a.status === "approved" ? "bg-green-100" : "bg-red-100"}`}
-                          >
-                            {a.status === "pending" ? <Clock className="h-5 w-5 text-amber-600" /> : a.status === "approved" ? <CheckCircle2 className="h-5 w-5 text-green-600" /> : <XCircle className="h-5 w-5 text-red-600" />}
+                            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${a.status === "pending" ? "bg-amber-500/15" : a.status === "approved" ? "bg-green-500/15" : "bg-red-500/15"}`}
+                          >                              {a.status === "pending" ? <Clock className="h-5 w-5 text-amber-600 dark:text-amber-400" /> : a.status === "approved" ? <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400" /> : <XCircle className="h-5 w-5 text-red-600 dark:text-red-400" />}
                           </motion.div>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-3 flex-wrap">

@@ -13,8 +13,6 @@ export default function WebhooksPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [url, setUrl] = useState("");
   const [events, setEvents] = useState("approval.decided,agent.revoked");
-  const [copied, setCopied] = useState(false);
-
   const handleCreate = () => {
     addWebhook({ id: "wh_" + Date.now().toString(36), url, eventTypes: events.split(",").map((e) => e.trim()), status: "active", lastDeliveryAt: null, secret: "whsec_" + Math.random().toString(36).slice(2, 16), createdAt: new Date().toISOString() });
     setUrl(""); setShowCreate(false);

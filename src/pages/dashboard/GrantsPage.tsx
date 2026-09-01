@@ -29,10 +29,13 @@ export default function GrantsPage() {
     const agent = agents.find((a) => a.id === form.agentId);
     if (!agent || !form.pattern) return;
     const grantId = "gr_" + Date.now().toString(36);
+    let expiresAt: string | null = null;
+    if (form.expiry === "30d") { const d = new Date(); d.setDate(d.getDate() + 30); expiresAt = d.toISOString(); }
+    else if (form.expiry === "90d") { const d = new Date(); d.setDate(d.getDate() + 90); expiresAt = d.toISOString(); }
     addGrant({
       id: grantId, agentId: form.agentId, agentName: agent.name,
       resourceType: form.resourceType, resourcePattern: form.pattern, actions: form.actions as any,
-      status: "active", grantedAt: new Date().toISOString(), expiresAt: null,
+      status: "active", grantedAt: new Date().toISOString(), expiresAt,
       usageCount: 0, usageCap: form.usageCap ? Number(form.usageCap) : null, grantedBy: "admin@acme.com",
     });
     try { localStorage.setItem("aa_getting_started_grants", "true"); } catch { /* noop */ }

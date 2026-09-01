@@ -145,12 +145,15 @@ const feedData = [
   { agent: "Security Scanner", action: "read", resource: "acme-corp/*", result: "denied" },
 ];
 
+let feedIdCounter = 0;
+
 function ActivityFeed() {
-  const [items, setItems] = useState(feedData.slice(0, 3));
+  const [items, setItems] = useState(() => feedData.slice(0, 3).map((d) => ({ ...d, key: `feed_${++feedIdCounter}` })));
   const idx = useRef(3);
   useEffect(() => {
     const i = setInterval(() => {
-      setItems((prev) => [feedData[idx.current % feedData.length], ...prev].slice(0, 4));
+      const next = feedData[idx.current % feedData.length];
+      setItems((prev) => [{ ...next, key: `feed_${++feedIdCounter}` }, ...prev].slice(0, 4));
       idx.current++;
     }, 3000);
     return () => clearInterval(i);
@@ -162,7 +165,7 @@ function ActivityFeed() {
         <AnimatePresence mode="popLayout">
           {items.map((item, i) => (
             <motion.div
-              key={`${item.agent}-${i}-${idx.current}`}
+              key={item.key}
               layout
               initial={{ opacity: 0, y: -12, scale: 0.98 }}
               animate={{ opacity: 1 - i * 0.15, y: 0, scale: 1 }}
@@ -700,8 +703,7 @@ export default function LandingPage() {
             </div>
             {c.footer.columns.map((col) => (<div key={col.title}><div className="eyebrow">{col.title}</div><ul className="mt-5 space-y-2.5 text-sm">{col.links.map((l) => (<li key={l.label}><Link to={l.href} className="text-muted-foreground transition-colors hover:text-foreground">{l.label}</Link></li>))}</ul></div>))}
           </div>
-          <div className="mt-12 flex flex-wrap items-center justify-between gap-3 rule-x pt-6 sm:mt-16 sm:gap-4 text-xs text-muted-foreground">
-            <span>© 2025 AgentAuth. All rights reserved.</span>
+          <div className="mt-12 flex flex-wrap items-center justify-between gap-3 rule-x pt-6 sm:mt-16 sm:gap-4 text-xs text-muted-foreground">              <span>© {new Date().getFullYear()} AgentAuth. All rights reserved.</span>
             <div className="flex items-center gap-2"><span className="inline-block h-1.5 w-1.5 rounded-full bg-foreground" />All systems operational</div>
           </div>
         </div>

@@ -16,7 +16,7 @@ function StatCard({ label, value, icon: Icon, color, index }: { label: string; v
         <CardContent className="p-5">
           <div className="flex items-start justify-between">
             <div><p className="eyebrow">{label}</p><p className="mt-1 text-2xl font-serif">{value}</p></div>
-            <div className={`flex h-9 w-9 items-center justify-center rounded-xl ${color}`}><Icon className="h-4.5 w-4.5" /></div>
+            <div className={`flex h-9 w-9 items-center justify-center rounded-xl ${color}`}><Icon className="h-[18px] w-[18px]" /></div>
           </div>
         </CardContent>
       </Card>

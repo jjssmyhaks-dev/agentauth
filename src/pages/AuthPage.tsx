@@ -160,7 +160,7 @@ export default function AuthPage() {
             </motion.button>
           </form>
           <div className="mt-4 text-center">
-            <button type="button" onClick={() => { setIsSignUp(!isSignUp); setError(""); }} className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+            <button type="button" onClick={() => { setIsSignUp((prev) => !prev); setError(""); setPassword(""); }} className="text-sm text-muted-foreground hover:text-foreground transition-colors">
               {isSignUp ? "Already have an account? Sign in" : "Don't have an account? Create one"}
             </button>
           </div>

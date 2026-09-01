@@ -4,16 +4,16 @@ import { motion, AnimatePresence } from "framer-motion";
 import { CheckCircle2, ShieldAlert, Bell, KeyRound, Settings, X } from "lucide-react";
 
 const typeConfig: Record<NotificationType, { icon: React.ElementType; color: string; border: string }> = {
-  approval: { icon: CheckCircle2, color: "text-amber-600", border: "border-l-amber-500" },
-  security: { icon: ShieldAlert, color: "text-red-600", border: "border-l-red-500" },
-  agent: { icon: Bell, color: "text-blue-600", border: "border-l-blue-500" },
-  grant: { icon: KeyRound, color: "text-emerald-600", border: "border-l-emerald-500" },
-  system: { icon: Settings, color: "text-purple-600", border: "border-l-purple-500" },
+  approval: { icon: CheckCircle2, color: "text-amber-600 dark:text-amber-400", border: "border-l-amber-500" },
+  security: { icon: ShieldAlert, color: "text-red-600 dark:text-red-400", border: "border-l-red-500" },
+  agent: { icon: Bell, color: "text-blue-600 dark:text-blue-400", border: "border-l-blue-500" },
+  grant: { icon: KeyRound, color: "text-emerald-600 dark:text-emerald-400", border: "border-l-emerald-500" },
+  system: { icon: Settings, color: "text-purple-600 dark:text-purple-400", border: "border-l-purple-500" },
 };
 
 const priorityBg: Record<NotificationPriority, string> = {
-  urgent: "bg-red-50 border-red-200",
-  high: "bg-amber-50 border-amber-200",
+  urgent: "bg-red-500/10 border-red-500/20",
+  high: "bg-amber-500/10 border-amber-500/20",
   medium: "bg-background border-hairline",
   low: "bg-background border-hairline",
 };

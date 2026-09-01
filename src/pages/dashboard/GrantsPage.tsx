@@ -35,6 +35,7 @@ export default function GrantsPage() {
       status: "active", grantedAt: new Date().toISOString(), expiresAt: null,
       usageCount: 0, usageCap: form.usageCap ? Number(form.usageCap) : null, grantedBy: "admin@acme.com",
     });
+    try { localStorage.setItem("aa_getting_started_grants", "true"); } catch { /* noop */ }
     addNotification({ type: "grant", priority: "medium", title: `Grant created: ${form.resourceType}`, message: `${agent.name} granted ${form.actions.join(", ")} on ${form.pattern}`, agentId: agent.id, agentName: agent.name, actionUrl: "/dashboard/grants" });
     pushToast({ type: "grant", priority: "low", title: "Grant created", message: `${agent.name} — ${form.actions.join(", ")} ${form.pattern}` });
     setShowCreate(false);

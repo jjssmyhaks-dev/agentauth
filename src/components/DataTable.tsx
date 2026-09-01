@@ -56,6 +56,7 @@ export default function DataTable<T>({
   const paged = sorted.slice(page * pageSize, (page + 1) * pageSize);
 
   const toggleSort = (colId: string) => {
+    setPage(0);
     if (sortCol === colId) {
       setSortDir((d) => (d === "asc" ? "desc" : "asc"));
     } else {

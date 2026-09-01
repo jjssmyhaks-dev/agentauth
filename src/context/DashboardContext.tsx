@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback, type ReactNode } from "react";
+import { createContext, useContext, useState, useCallback, useMemo, type ReactNode } from "react";
 import type { Agent, Grant, Approval, AuditEntry, ApiKey, Webhook, AgentStats } from "@/types";
 import {
   mockAgents,
@@ -22,11 +22,13 @@ interface DashboardContextType {
   totalTokens: number;
   totalActions: number;
   addAgent: (agent: Agent) => void;
+  updateAgent: (id: string, updates: Partial<Agent>) => void;
   addGrant: (grant: Grant) => void;
   addApproval: (approval: Approval) => void;
   approveRequest: (id: string) => void;
   denyRequest: (id: string, reason: string) => void;
   revokeAgent: (id: string) => void;
+  revokeAllAgents: () => void;
   revokeGrant: (id: string) => void;
   addApiKey: (key: ApiKey) => void;
   revokeApiKey: (id: string) => void;
@@ -43,17 +45,21 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
   const [agents, setAgents] = useState<Agent[]>(mockAgents);
   const [grants, setGrants] = useState<Grant[]>(mockGrants);
   const [approvals, setApprovals] = useState<Approval[]>(mockApprovals);
-  const [auditLog] = useState<AuditEntry[]>(mockAuditLog);
+  const [auditLog, setAuditLog] = useState<AuditEntry[]>(mockAuditLog);
   const [apiKeys, setApiKeys] = useState<ApiKey[]>(mockApiKeys);
   const [webhooks, setWebhooks] = useState<Webhook[]>(mockWebhooks);
   const [agentStats] = useState<AgentStats[]>(mockAgentStats);
 
-  const pendingApprovals = approvals.filter((a) => a.status === "pending").length;
-  const totalTokens = agents.reduce((s, a) => s + a.tokensIssued, 0);
-  const totalActions = agents.reduce((s, a) => s + a.actionsTotal, 0);
+  const pendingApprovals = useMemo(() => approvals.filter((a) => a.status === "pending").length, [approvals]);
+  const totalTokens = useMemo(() => agents.reduce((s, a) => s + a.tokensIssued, 0), [agents]);
+  const totalActions = useMemo(() => agents.reduce((s, a) => s + a.actionsTotal, 0), [agents]);
 
   const addAgent = useCallback((agent: Agent) => {
     setAgents((prev) => [agent, ...prev]);
+  }, []);
+
+  const updateAgent = useCallback((id: string, updates: Partial<Agent>) => {
+    setAgents((prev) => prev.map((a) => (a.id === id ? { ...a, ...updates } : a)));
   }, []);
 
   const addGrant = useCallback((grant: Grant) => {
@@ -86,6 +92,10 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
     );
   }, []);
 
+  const revokeAllAgents = useCallback(() => {
+    setAgents((prev) => prev.map((a) => ({ ...a, status: "revoked" as const })));
+  }, []);
+
   const revokeGrant = useCallback((id: string) => {
     setGrants((prev) =>
       prev.map((g) => (g.id === id ? { ...g, status: "revoked" as const } : g))
@@ -116,10 +126,8 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
     );
   }, []);
 
-  const [auditLogState, setAuditLogState] = useState<AuditEntry[]>(mockAuditLog);
-
   const addAuditEntry = useCallback((entry: AuditEntry) => {
-    setAuditLogState((prev) => [entry, ...prev].slice(0, 200));
+    setAuditLog((prev) => [entry, ...prev].slice(0, 200));
   }, []);
 
   const addApproval = useCallback((approval: Approval) => {
@@ -147,9 +155,9 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
   return (
     <DashboardContext.Provider
       value={{
-        agents, grants, approvals, auditLog: auditLogState, apiKeys, webhooks, agentStats,
+        agents, grants, approvals, auditLog, apiKeys, webhooks, agentStats,
         pendingApprovals, totalTokens, totalActions,
-        addAgent, addGrant, addApproval, approveRequest, denyRequest, revokeAgent, revokeGrant,
+        addAgent, updateAgent, addGrant, addApproval, approveRequest, denyRequest, revokeAgent, revokeAllAgents, revokeGrant,
         addApiKey, revokeApiKey, addWebhook, pauseWebhook, addAuditEntry,
         incrementAgentTokens, incrementAgentActions,
       }}

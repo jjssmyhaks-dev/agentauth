@@ -105,6 +105,7 @@ export default function AgentsPage() {
       lastActiveAt: new Date().toISOString(), tokensIssued: 0, actionsTotal: 0,
       actionsAllowed: 0, actionsDenied: 0, tier: "free", tags: [],
     });
+    try { localStorage.setItem("aa_getting_started_agents", "true"); } catch { /* noop */ }
     addNotification({ type: "agent", priority: "medium", title: `Agent created: ${newName}`, message: `New ${newMode} agent registered with Ed25519 identity`, actionUrl: "/dashboard/agents" });
     pushToast({ type: "agent", priority: "low", title: "Agent created", message: newName });
     setNewName(""); setShowCreate(false);

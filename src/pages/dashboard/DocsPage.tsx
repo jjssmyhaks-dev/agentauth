@@ -65,7 +65,7 @@ response = requests.get(
 
 function CodeBlock({ code, language }: { code: string; language?: string }) {
   const [copied, setCopied] = useState(false);
-  const handleCopy = () => { navigator.clipboard.writeText(code); setCopied(true); setTimeout(() => setCopied(false), 2000); };
+  const handleCopy = async () => { try { await navigator.clipboard.writeText(code); } catch { /* fallback */ } setCopied(true); setTimeout(() => setCopied(false), 2000); };
   return (
     <div className="rounded-2xl border border-hairline bg-surface/60 overflow-hidden">
       <div className="flex items-center justify-between border-b border-hairline px-4 py-2">

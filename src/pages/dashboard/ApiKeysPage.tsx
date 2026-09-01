@@ -23,7 +23,7 @@ export default function ApiKeysPage() {
     setNewKey(fullKey); setName(""); setShowCreate(false);
   };
 
-  const handleCopy = () => { if (newKey) { navigator.clipboard.writeText(newKey); setCopied(true); setTimeout(() => setCopied(false), 2000); } };
+  const handleCopy = async () => { if (newKey) { try { await navigator.clipboard.writeText(newKey); } catch { /* fallback */ } setCopied(true); setTimeout(() => setCopied(false), 2000); } };
 
   return (
     <div className="space-y-6">
@@ -32,8 +32,8 @@ export default function ApiKeysPage() {
         <Button onClick={() => setShowCreate(true)} className="rounded-full bg-primary text-primary-foreground hover:opacity-90"><Plus className="mr-2 h-4 w-4" /> New API Key</Button>
       </div>
       {newKey && (
-        <Card className="border-green-200 bg-green-50"><CardContent className="p-5 flex items-center justify-between">
-          <div><p className="text-sm font-medium text-green-700">API Key Created</p><p className="mt-1 text-xs text-muted-foreground">Copy this key now — you won't be able to see it again.</p>
+        <Card className="border-green-500/30 bg-green-500/10"><CardContent className="p-5 flex items-center justify-between">
+          <div><p className="text-sm font-medium text-green-700 dark:text-green-300">API Key Created</p><p className="mt-1 text-xs text-muted-foreground">Copy this key now — you won't be able to see it again.</p>
             <div className="mt-3 flex items-center gap-2"><code className="rounded-xl bg-white border border-hairline px-3 py-1.5 font-mono text-sm">{showKey ? newKey : "••••••••••••••••"}</code><Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setShowKey(!showKey)}>{showKey ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}</Button><Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleCopy}>{copied ? <Check className="h-3.5 w-3.5 text-green-600" /> : <Copy className="h-3.5 w-3.5" />}</Button></div>
           </div>
           <Button variant="ghost" size="sm" onClick={() => setNewKey(null)}>Dismiss</Button>

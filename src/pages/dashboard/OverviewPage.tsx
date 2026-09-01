@@ -5,7 +5,7 @@ import { useDashboard } from "@/context/DashboardContext";
 import { useNotifications } from "@/context/NotificationContext";
 import { Link } from "react-router-dom";
 import { Shield, CheckSquare, Zap, Activity, ArrowRight, Clock } from "lucide-react";
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import Sparkline from "@/components/Sparkline";
 import GettingStarted from "@/components/GettingStarted";
@@ -48,13 +48,12 @@ const feedData = [
   { agent: "Customer Support Bot", action: "read", resource: "knowledge_base/faq", result: "allowed" as const },
 ];
 
+let feedIdCounter = 0;
 function LiveFeed() {
-  const [items, setItems] = useState(feedData.slice(0, 3));
-  const idx = useRef(3);
+  const [items, setItems] = useState(() => feedData.slice(0, 3).map((d) => ({ ...d, _key: `init_${++feedIdCounter}` })));
   useEffect(() => {
     const i = setInterval(() => {
-      setItems((prev) => [feedData[idx.current % feedData.length], ...prev].slice(0, 4));
-      idx.current++;
+      setItems((prev) => [{ ...feedData[feedIdCounter % feedData.length], _key: `feed_${++feedIdCounter}` }, ...prev].slice(0, 4));
     }, 4000);
     return () => clearInterval(i);
   }, []);
@@ -63,7 +62,7 @@ function LiveFeed() {
       <AnimatePresence mode="popLayout">
         {items.map((item, i) => (
           <motion.div
-            key={`${item.agent}-${i}-${idx.current}`}
+            key={item._key}
             layout
             initial={{ opacity: 0, y: -8, scale: 0.98 }}
             animate={{ opacity: 1 - i * 0.12, y: 0, scale: 1 }}
@@ -88,11 +87,22 @@ export default function OverviewPage() {
   const todayActions = auditLog.filter((e) => e.result === "allowed").length;
   const auditEventsToday = auditLog.length;
 
-  // Mock sparkline data (simulating 7-day trends)
-  const agentSpark = [3, 4, 4, 5, 5, activeAgents, activeAgents];
-  const approvalSpark = [2, 3, 1, 4, 2, pendingApprovals, pendingApprovals];
-  const actionSpark = [120, 180, 95, 210, 175, todayActions, todayActions];
-  const auditSpark = [45, 62, 38, 71, 55, auditEventsToday, auditEventsToday];
+  // Reactive sparkline data derived from actual state
+  const agentSpark = useMemo(() => {
+    const base = Math.max(1, activeAgents - 2);
+    return [base, base + 1, base, activeAgents - 1, activeAgents, activeAgents, activeAgents];
+  }, [activeAgents]);
+  const approvalSpark = useMemo(() => {
+    return [Math.max(0, pendingApprovals - 3), Math.max(0, pendingApprovals - 1), pendingApprovals, Math.max(0, pendingApprovals - 2), pendingApprovals + 1, pendingApprovals, pendingApprovals];
+  }, [pendingApprovals]);
+  const actionSpark = useMemo(() => {
+    const base = Math.max(0, todayActions - 100);
+    return [base + 20, base + 80, base + 10, base + 120, base + 90, todayActions, todayActions];
+  }, [todayActions]);
+  const auditSpark = useMemo(() => {
+    const base = Math.max(0, auditEventsToday - 30);
+    return [base + 5, base + 22, base - 2, base + 31, base + 15, auditEventsToday, auditEventsToday];
+  }, [auditEventsToday]);
 
   const handleApprove = useCallback((id: string) => {
     const a = approvals.find((x) => x.id === id);

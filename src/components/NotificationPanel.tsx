@@ -9,11 +9,11 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { useNavigate } from "react-router-dom";
 
 const typeConfig: Record<NotificationType, { icon: React.ElementType; color: string; bg: string }> = {
-  approval: { icon: CheckCircle2, color: "text-amber-600", bg: "bg-amber-100" },
-  security: { icon: ShieldAlert, color: "text-red-600", bg: "bg-red-100" },
-  agent: { icon: Bell, color: "text-blue-600", bg: "bg-blue-100" },
-  grant: { icon: KeyRound, color: "text-emerald-600", bg: "bg-emerald-100" },
-  system: { icon: Settings, color: "text-purple-600", bg: "bg-purple-100" },
+  approval: { icon: CheckCircle2, color: "text-amber-600 dark:text-amber-400", bg: "bg-amber-500/15" },
+  security: { icon: ShieldAlert, color: "text-red-600 dark:text-red-400", bg: "bg-red-500/15" },
+  agent: { icon: Bell, color: "text-blue-600 dark:text-blue-400", bg: "bg-blue-500/15" },
+  grant: { icon: KeyRound, color: "text-emerald-600 dark:text-emerald-400", bg: "bg-emerald-500/15" },
+  system: { icon: Settings, color: "text-purple-600 dark:text-purple-400", bg: "bg-purple-500/15" },
 };
 
 const priorityDot: Record<string, string> = {

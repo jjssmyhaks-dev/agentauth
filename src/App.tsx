@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { DashboardProvider } from "@/context/DashboardContext";
 import { NotificationProvider } from "@/context/NotificationContext";
 import { ThemeProvider } from "@/context/ThemeContext";
+import ErrorBoundary from "@/components/ErrorBoundary";
 import { motion } from "framer-motion";
 
 const LandingPage = lazy(() => import("@/pages/LandingPage"));
@@ -35,6 +36,7 @@ const APIReferencePage = lazy(() => import("@/pages/public/APIReferencePage"));
 const PrivacyPage = lazy(() => import("@/pages/public/PrivacyPage"));
 const TermsPage = lazy(() => import("@/pages/public/TermsPage"));
 const SecurityPage = lazy(() => import("@/pages/public/SecurityPage"));
+const NotFoundPage = lazy(() => import("@/pages/NotFoundPage"));
 
 function PageLoader() {
   return (
@@ -66,6 +68,7 @@ function AuthRoute() {
 
 function AppRoutes() {
   return (
+    <ErrorBoundary fallback={<PageLoader />}>
     <Suspense fallback={<PageLoader />}>
     <Routes>
       <Route path="/" element={<LandingPage />} />
@@ -109,9 +112,10 @@ function AppRoutes() {
         <Route path="settings" element={<SettingsPage />} />
         <Route path="docs" element={<DocsPage />} />
       </Route>
-      <Route path="*" element={<Navigate to="/" replace />} />
+      <Route path="*" element={<NotFoundPage />} />
     </Routes>
     </Suspense>
+    </ErrorBoundary>
   );
 }
 

@@ -18,7 +18,7 @@ const steps = [
 
 export default function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
   const [step, setStep] = useState(0);
-  const { addAgent, addGrant, agents } = useDashboard();
+  const { addAgent, updateAgent, addGrant, agents } = useDashboard();
   const [agentName, setAgentName] = useState("");
   const [agentId, setAgentId] = useState("");
   const [resourceType, setResourceType] = useState("database");
@@ -29,7 +29,7 @@ export default function OnboardingWizard({ onComplete }: { onComplete: () => voi
 
   const handleCreateAgent = () => {
     const id = "ag_" + Date.now().toString(36); setAgentId(id);
-    addAgent({ id, name: agentName || "My First Agent", status: "active", approvalMode: "human-in-the-loop", publicKey: "ed25519_pk_" + Math.random().toString(36).slice(2, 14), fingerprint: "SHA256:" + Math.random().toString(36).slice(2, 10), trustLevel: "normal", trustScore: 75, createdAt: new Date().toISOString(), lastActiveAt: new Date().toISOString(), tokensIssued: 0, actionsTotal: 0, actionsAllowed: 0, actionsDenied: 0, tier: "free", tags: ["onboarding"] });
+    addAgent({ id, name: agentName || "My First Agent", status: "active", approvalMode, publicKey: "ed25519_pk_" + Math.random().toString(36).slice(2, 14), fingerprint: "SHA256:" + Math.random().toString(36).slice(2, 10), trustLevel: "normal", trustScore: 75, createdAt: new Date().toISOString(), lastActiveAt: new Date().toISOString(), tokensIssued: 0, actionsTotal: 0, actionsAllowed: 0, actionsDenied: 0, tier: "free", tags: ["onboarding"] });
     setStep(1);
   };
 
@@ -39,8 +39,13 @@ export default function OnboardingWizard({ onComplete }: { onComplete: () => voi
     setStep(2);
   };
 
-  const handleCopy = () => {
-    navigator.clipboard.writeText(`client = AgentAuthClient("${agentId}", private_key)\ntoken = client.get_token()`);
+  const handleSetApprovalMode = () => {
+    updateAgent(agentId, { approvalMode });
+    setStep(3);
+  };
+
+  const handleCopy = async () => {
+    try { await navigator.clipboard.writeText(`client = AgentAuthClient("${agentId}", private_key)\ntoken = client.get_token()`); } catch { /* fallback */ }
     setCopied(true); setTimeout(() => setCopied(false), 2000);
   };
 
@@ -69,7 +74,7 @@ export default function OnboardingWizard({ onComplete }: { onComplete: () => voi
                 <button onClick={() => setApprovalMode("human-in-the-loop")} className={`rounded-2xl border p-6 text-left transition-all ${approvalMode === "human-in-the-loop" ? "border-foreground bg-foreground/5" : "border-hairline hover:border-foreground/50"}`}><div className="text-2xl mb-2">🛡️</div><h3 className="font-medium">Human-in-the-loop</h3><p className="mt-1 text-xs text-muted-foreground">Agent waits for your approval on sensitive actions</p></button>
               </div></div>}
               {step === 3 && <div className="space-y-4 text-center">
-                <div className="flex justify-center"><div className="flex h-14 w-14 items-center justify-center rounded-full bg-green-100"><Rocket className="h-7 w-7 text-green-600" /></div></div>
+                <div className="flex justify-center"><div className="flex h-14 w-14 items-center justify-center rounded-full bg-green-500/15"><Rocket className="h-7 w-7 text-green-600 dark:text-green-400" /></div></div>
                 <div><p className="eyebrow">Agent ID</p><p className="font-mono text-xs mt-1">{agentId}</p></div>
                 <div><p className="eyebrow">Approval Mode</p><Badge variant={approvalMode === "autonomous" ? "info" : "secondary"} className="mt-1">{approvalMode}</Badge></div>
                 <div className="rounded-2xl border border-hairline bg-background p-4 text-left">
@@ -82,7 +87,7 @@ export default function OnboardingWizard({ onComplete }: { onComplete: () => voi
         </AnimatePresence>
         <div className="mt-6 flex justify-between">
           {step > 0 ? <Button variant="ghost" onClick={() => setStep(step - 1)} className="text-muted-foreground"><ArrowLeft className="mr-2 h-4 w-4" /> Back</Button> : <div />}
-          {step < 3 ? <Button onClick={() => { if (step === 0) handleCreateAgent(); else if (step === 1) handleCreateGrant(); else setStep(3); }} disabled={(step === 0 && !agentName) || (step === 1 && !resourcePattern)} className="rounded-full bg-primary text-primary-foreground hover:opacity-90">Continue <ArrowRight className="ml-2 h-4 w-4" /></Button> : <Button onClick={onComplete} className="rounded-full bg-primary text-primary-foreground hover:opacity-90">Go to Dashboard <ArrowRight className="ml-2 h-4 w-4" /></Button>}
+          {step < 3 ? <Button onClick={() => { if (step === 0) handleCreateAgent(); else if (step === 1) handleCreateGrant(); else handleSetApprovalMode(); }} disabled={(step === 0 && !agentName) || (step === 1 && !resourcePattern)} className="rounded-full bg-primary text-primary-foreground hover:opacity-90">Continue <ArrowRight className="ml-2 h-4 w-4" /></Button> : <Button onClick={onComplete} className="rounded-full bg-primary text-primary-foreground hover:opacity-90">Go to Dashboard <ArrowRight className="ml-2 h-4 w-4" /></Button>}
         </div>
       </div>
     </div>

@@ -13,17 +13,17 @@ import {
 } from "lucide-react";
 
 const typeConfig: Record<NotificationType, { icon: React.ElementType; color: string; bg: string; label: string }> = {
-  approval: { icon: CheckCircle2, color: "text-amber-600", bg: "bg-amber-100", label: "Approval" },
-  security: { icon: ShieldAlert, color: "text-red-600", bg: "bg-red-100", label: "Security" },
-  agent: { icon: Bell, color: "text-blue-600", bg: "bg-blue-100", label: "Agent" },
-  grant: { icon: KeyRound, color: "text-emerald-600", bg: "bg-emerald-100", label: "Grant" },
-  system: { icon: Settings, color: "text-purple-600", bg: "bg-purple-100", label: "System" },
+  approval: { icon: CheckCircle2, color: "text-amber-600 dark:text-amber-400", bg: "bg-amber-500/15", label: "Approval" },
+  security: { icon: ShieldAlert, color: "text-red-600 dark:text-red-400", bg: "bg-red-500/15", label: "Security" },
+  agent: { icon: Bell, color: "text-blue-600 dark:text-blue-400", bg: "bg-blue-500/15", label: "Agent" },
+  grant: { icon: KeyRound, color: "text-emerald-600 dark:text-emerald-400", bg: "bg-emerald-500/15", label: "Grant" },
+  system: { icon: Settings, color: "text-purple-600 dark:text-purple-400", bg: "bg-purple-500/15", label: "System" },
 };
 
 const priorityBadge: Record<string, string> = {
-  urgent: "bg-red-100 text-red-700 border-red-200",
-  high: "bg-amber-100 text-amber-700 border-amber-200",
-  medium: "bg-blue-50 text-blue-700 border-blue-200",
+  urgent: "bg-red-500/15 text-red-600 dark:text-red-400 border-red-500/20",
+  high: "bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/20",
+  medium: "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20",
   low: "bg-muted text-muted-foreground border-hairline",
 };
 

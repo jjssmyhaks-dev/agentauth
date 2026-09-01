@@ -37,10 +37,29 @@ function pickRandom<T extends readonly unknown[]>(arr: T): T[number] {
 export function useRealtime(intervalMs = 8000) {
   const { addAuditEntry, incrementAgentTokens, incrementAgentActions, addApproval, agents } = useDashboard();
   const { addNotification } = useNotifications();
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Use refs so the interval callback always reads latest values
+  // without re-registering the interval on every state change
+  const agentsRef = useRef(agents);
+  agentsRef.current = agents;
+
+  const addAuditEntryRef = useRef(addAuditEntry);
+  addAuditEntryRef.current = addAuditEntry;
+
+  const incrementAgentTokensRef = useRef(incrementAgentTokens);
+  incrementAgentTokensRef.current = incrementAgentTokens;
+
+  const incrementAgentActionsRef = useRef(incrementAgentActions);
+  incrementAgentActionsRef.current = incrementAgentActions;
+
+  const addApprovalRef = useRef(addApproval);
+  addApprovalRef.current = addApproval;
+
+  const addNotificationRef = useRef(addNotification);
+  addNotificationRef.current = addNotification;
 
   useEffect(() => {
-    timerRef.current = setInterval(() => {
+    const timer = setInterval(() => {
       // 1) Generate a live audit entry
       const template = pickRandom(activeAgentTemplates);
       const action = pickRandom(template.actions) as string;
@@ -51,7 +70,7 @@ export function useRealtime(intervalMs = 8000) {
       const id = `ae_live_${++auditCounter}`;
       const hash = "0x" + Math.random().toString(36).slice(2, 18).padStart(16, "0");
 
-      addAuditEntry({
+      addAuditEntryRef.current({
         id,
         timestamp: ts,
         actor: template.name,
@@ -65,17 +84,18 @@ export function useRealtime(intervalMs = 8000) {
       });
 
       // 2) Increment agent token/action counters
-      incrementAgentTokens(template.id, Math.floor(Math.random() * 3) + 1);
-      incrementAgentActions(template.id, result === "allowed");
+      incrementAgentTokensRef.current(template.id, Math.floor(Math.random() * 3) + 1);
+      incrementAgentActionsRef.current(template.id, result === "allowed");
 
       // 3) Occasionally create a new pending approval (~30% chance)
-      if (Math.random() < 0.3 && agents.filter((a) => a.approvalMode === "human-in-the-loop" && a.status === "active").length > 0) {
-        const activeHITL = agents.filter((a) => a.approvalMode === "human-in-the-loop" && a.status === "active");
+      if (Math.random() < 0.3) {
+        const currentAgents = agentsRef.current;
+        const activeHITL = currentAgents.filter((a) => a.approvalMode === "human-in-the-loop" && a.status === "active");
         if (activeHITL.length > 0) {
           const agent = pickRandom(activeHITL);
           const tmpl = pickRandom(approvalTemplates);
           const approvalId = `ap_live_${++approvalCounter}`;
-          addApproval({
+          addApprovalRef.current({
             id: approvalId,
             agentId: agent.id,
             agentName: agent.name,
@@ -90,7 +110,7 @@ export function useRealtime(intervalMs = 8000) {
             denialReason: null,
           });
 
-          addNotification({
+          addNotificationRef.current({
             type: "approval",
             priority: "high",
             title: `New approval needed: ${tmpl.action} on ${tmpl.resourceType}`,
@@ -103,8 +123,6 @@ export function useRealtime(intervalMs = 8000) {
       }
     }, intervalMs);
 
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
-  }, [intervalMs, addAuditEntry, incrementAgentTokens, incrementAgentActions, addApproval, addNotification, agents]);
+    return () => clearInterval(timer);
+  }, [intervalMs]); // Only depends on interval — never re-registers
 }

@@ -1,4 +1,4 @@
-import type { Agent, Grant, Approval, AuditEntry, ApiKey, Webhook, AgentStats, Org, Notification } from "@/types";
+import type { Agent, Grant, Approval, AuditEntry, ApiKey, Webhook, AgentStats, Org, Notification, AgentHealth, AgentSession, Alert, AlertRule, AlertCategory, AlertSeverity } from "@/types";
 
 function hashCode(str: string): string {
   let hash = 0;
@@ -575,3 +575,283 @@ export function generateAgentTokenData(): Array<{ agent: string; count: number }
     { agent: "Security Scanner", count: 5678 },
   ];
 }
+
+// --- Agent Health ---
+function genResponseHistory(base: number, variance: number): number[] {
+  return Array.from({ length: 30 }, () => Math.max(5, base + (Math.random() - 0.5) * variance * 2));
+}
+
+export const mockAgentHealth: AgentHealth[] = [
+  {
+    agentId: "ag_01H8X9A1B2C3D4E5F6G7H8I9",
+    agentName: "Code Review Bot",
+    status: "healthy",
+    lastHeartbeat: new Date(Date.now() - 2000).toISOString(),
+    heartbeatIntervalMs: 15000,
+    missedHeartbeats: 0,
+    maxMissedHeartbeats: 3,
+    uptimePercent: 99.8,
+    avgResponseMs: 45,
+    p95ResponseMs: 78,
+    p99ResponseMs: 120,
+    totalHeartbeats: 2847,
+    failedHeartbeats: 6,
+    responseHistory: genResponseHistory(45, 20),
+    statusChanges: [
+      { from: "degraded", to: "healthy", at: "2025-08-30T02:00:00Z", reason: "Response times normalized after network recovery" },
+      { from: "healthy", to: "degraded", at: "2025-08-30T01:30:00Z", reason: "Elevated response times (>200ms p95)" },
+    ],
+  },
+  {
+    agentId: "ag_01H8X9B2C3D4E5F6G7H8I9J0",
+    agentName: "SDR Outreach Agent",
+    status: "healthy",
+    lastHeartbeat: new Date(Date.now() - 4000).toISOString(),
+    heartbeatIntervalMs: 15000,
+    missedHeartbeats: 0,
+    maxMissedHeartbeats: 3,
+    uptimePercent: 99.2,
+    avgResponseMs: 120,
+    p95ResponseMs: 185,
+    p99ResponseMs: 340,
+    totalHeartbeats: 3892,
+    failedHeartbeats: 31,
+    responseHistory: genResponseHistory(120, 40),
+    statusChanges: [],
+  },
+  {
+    agentId: "ag_01H8X9C3D4E5F6G7H8I9J0K1",
+    agentName: "Database Migration Agent",
+    status: "degraded",
+    lastHeartbeat: new Date(Date.now() - 12000).toISOString(),
+    heartbeatIntervalMs: 15000,
+    missedHeartbeats: 1,
+    maxMissedHeartbeats: 3,
+    uptimePercent: 94.5,
+    avgResponseMs: 890,
+    p95ResponseMs: 1450,
+    p99ResponseMs: 2100,
+    totalHeartbeats: 1245,
+    failedHeartbeats: 68,
+    responseHistory: genResponseHistory(890, 300),
+    statusChanges: [
+      { from: "healthy", to: "degraded", at: "2025-08-30T03:00:00Z", reason: "Missed 1 heartbeat, response times > 800ms" },
+    ],
+  },
+  {
+    agentId: "ag_01H8X9D4E5F6G7H8I9J0K1L2",
+    agentName: "Customer Support Bot",
+    status: "healthy",
+    lastHeartbeat: new Date(Date.now() - 1000).toISOString(),
+    heartbeatIntervalMs: 15000,
+    missedHeartbeats: 0,
+    maxMissedHeartbeats: 3,
+    uptimePercent: 99.9,
+    avgResponseMs: 32,
+    p95ResponseMs: 55,
+    p99ResponseMs: 82,
+    totalHeartbeats: 5612,
+    failedHeartbeats: 5,
+    responseHistory: genResponseHistory(32, 15),
+    statusChanges: [],
+  },
+  {
+    agentId: "ag_01H8X9E5F6G7H8I9J0K1L2M3",
+    agentName: "Data Pipeline Agent",
+    status: "unhealthy",
+    lastHeartbeat: new Date(Date.now() - 50000).toISOString(),
+    heartbeatIntervalMs: 15000,
+    missedHeartbeats: 3,
+    maxMissedHeartbeats: 3,
+    uptimePercent: 87.3,
+    avgResponseMs: 340,
+    p95ResponseMs: 620,
+    p99ResponseMs: 1100,
+    totalHeartbeats: 987,
+    failedHeartbeats: 125,
+    responseHistory: genResponseHistory(340, 150),
+    statusChanges: [
+      { from: "degraded", to: "unhealthy", at: "2025-08-30T03:45:00Z", reason: "3 consecutive missed heartbeats during key rotation" },
+      { from: "healthy", to: "degraded", at: "2025-08-30T03:00:00Z", reason: "Key rotation started, tokens being reissued" },
+    ],
+  },
+  {
+    agentId: "ag_01H8X9F6G7H8I9J0K1L2M3N4",
+    agentName: "Security Scanner",
+    status: "offline",
+    lastHeartbeat: "2025-08-25T09:30:00Z",
+    heartbeatIntervalMs: 15000,
+    missedHeartbeats: 100,
+    maxMissedHeartbeats: 3,
+    uptimePercent: 0,
+    avgResponseMs: 0,
+    p95ResponseMs: 0,
+    p99ResponseMs: 0,
+    totalHeartbeats: 2341,
+    failedHeartbeats: 2341,
+    responseHistory: [],
+    statusChanges: [
+      { from: "unhealthy", to: "offline", at: "2025-08-25T09:35:00Z", reason: "Agent revoked — all heartbeats stopped" },
+    ],
+  },
+];
+
+// --- Agent Sessions ---
+export const mockAgentSessions: AgentSession[] = [
+  {
+    id: "sess_001", agentId: "ag_01H8X9A1B2C3D4E5F6G7H8I9", agentName: "Code Review Bot",
+    status: "active", token: "tok_••••8f3a", startedAt: "2025-08-30T03:00:00Z",
+    lastActivityAt: "2025-08-30T04:28:00Z", expiresAt: "2025-08-30T05:00:00Z",
+    endedAt: null, durationMs: null, tokensUsed: 47, actionsPerformed: 34,
+    ipAddress: "10.0.1.15", userAgent: "AgentAuth-SDK/2.1 (TypeScript)",
+    scopes: ["repository:read", "repository:write", "ci_pipeline:read"], riskScore: 12,
+  },
+  {
+    id: "sess_002", agentId: "ag_01H8X9B2C3D4E5F6G7H8I9J0", agentName: "SDR Outreach Agent",
+    status: "active", token: "tok_••••d7e2", startedAt: "2025-08-30T02:00:00Z",
+    lastActivityAt: "2025-08-30T04:25:00Z", expiresAt: "2025-08-30T03:00:00Z",
+    endedAt: null, durationMs: null, tokensUsed: 89, actionsPerformed: 56,
+    ipAddress: "10.0.2.34", userAgent: "AgentAuth-SDK/2.1 (Python)",
+    scopes: ["email:read", "email:write", "crm:read", "crm:write"], riskScore: 28,
+  },
+  {
+    id: "sess_003", agentId: "ag_01H8X9C3D4E5F6G7H8I9J0K1", agentName: "Database Migration Agent",
+    status: "idle", token: "tok_••••b4c1", startedAt: "2025-08-30T01:00:00Z",
+    lastActivityAt: "2025-08-30T03:45:00Z", expiresAt: "2025-08-30T02:00:00Z",
+    endedAt: null, durationMs: null, tokensUsed: 23, actionsPerformed: 12,
+    ipAddress: "10.0.3.89", userAgent: "AgentAuth-SDK/2.1 (TypeScript)",
+    scopes: ["database:read", "database:write", "database:execute"], riskScore: 67,
+  },
+  {
+    id: "sess_004", agentId: "ag_01H8X9D4E5F6G7H8I9J0K1L2", agentName: "Customer Support Bot",
+    status: "active", token: "tok_••••a9f5", startedAt: "2025-08-30T00:00:00Z",
+    lastActivityAt: "2025-08-30T04:30:00Z", expiresAt: "2025-08-30T01:00:00Z",
+    endedAt: null, durationMs: null, tokensUsed: 156, actionsPerformed: 128,
+    ipAddress: "10.0.4.12", userAgent: "AgentAuth-SDK/2.1 (Python)",
+    scopes: ["knowledge_base:read", "ticket_system:read", "ticket_system:write"], riskScore: 5,
+  },
+  {
+    id: "sess_005", agentId: "ag_01H8X9A1B2C3D4E5F6G7H8I9", agentName: "Code Review Bot",
+    status: "expired", token: "tok_••••c2d8", startedAt: "2025-08-29T14:00:00Z",
+    lastActivityAt: "2025-08-29T16:28:00Z", expiresAt: "2025-08-29T15:00:00Z",
+    endedAt: "2025-08-29T16:30:00Z", durationMs: 9000000, tokensUsed: 128, actionsPerformed: 96,
+    ipAddress: "10.0.1.15", userAgent: "AgentAuth-SDK/2.1 (TypeScript)",
+    scopes: ["repository:read", "repository:write"], riskScore: 8,
+  },
+  {
+    id: "sess_006", agentId: "ag_01H8X9B2C3D4E5F6G7H8I9J0", agentName: "SDR Outreach Agent",
+    status: "revoked", token: "tok_••••e1f7", startedAt: "2025-08-29T10:00:00Z",
+    lastActivityAt: "2025-08-29T12:00:00Z", expiresAt: "2025-08-29T11:00:00Z",
+    endedAt: "2025-08-29T12:05:00Z", durationMs: 7200000, tokensUsed: 45, actionsPerformed: 38,
+    ipAddress: "10.0.2.55", userAgent: "AgentAuth-SDK/2.1 (Python)",
+    scopes: ["email:read", "email:write"], riskScore: 42,
+  },
+  {
+    id: "sess_007", agentId: "ag_01H8X9E5F6G7H8I9J0K1L2M3", agentName: "Data Pipeline Agent",
+    status: "active", token: "tok_••••g3h9", startedAt: "2025-08-30T02:00:00Z",
+    lastActivityAt: "2025-08-30T02:30:00Z", expiresAt: "2025-08-30T03:00:00Z",
+    endedAt: null, durationMs: null, tokensUsed: 12, actionsPerformed: 8,
+    ipAddress: "10.0.5.67", userAgent: "AgentAuth-SDK/2.1 (TypeScript)",
+    scopes: ["database:read", "database:write"], riskScore: 55,
+  },
+  {
+    id: "sess_008", agentId: "ag_01H8X9D4E5F6G7H8I9J0K1L2", agentName: "Customer Support Bot",
+    status: "expired", token: "tok_••••i5j1", startedAt: "2025-08-29T22:00:00Z",
+    lastActivityAt: "2025-08-30T00:00:00Z", expiresAt: "2025-08-29T23:00:00Z",
+    endedAt: "2025-08-30T00:00:00Z", durationMs: 7200000, tokensUsed: 78, actionsPerformed: 62,
+    ipAddress: "10.0.4.12", userAgent: "AgentAuth-SDK/2.1 (Python)",
+    scopes: ["knowledge_base:read", "ticket_system:read"], riskScore: 3,
+  },
+];
+
+// --- Alert Rules ---
+export const mockAlertRules: AlertRule[] = [
+  {
+    id: "rule_001", name: "Agent Offline", description: "Agent missed too many heartbeats and is now offline",
+    category: "health", severity: "critical", enabled: true, condition: "missed_heartbeats >= 3",
+    threshold: 3, cooldownMs: 300000, lastTriggeredAt: "2025-08-25T09:35:00Z", triggerCount: 2,
+    notifyChannels: ["dashboard", "email", "webhook"],
+  },
+  {
+    id: "rule_002", name: "High Denial Rate", description: "Agent denial rate exceeds 10% in the last hour",
+    category: "permission", severity: "warning", enabled: true, condition: "denial_rate > 0.1",
+    threshold: 10, cooldownMs: 600000, lastTriggeredAt: "2025-08-30T03:30:00Z", triggerCount: 8,
+    notifyChannels: ["dashboard", "email"],
+  },
+  {
+    id: "rule_003", name: "Trust Score Critical", description: "Agent trust score dropped below 50",
+    category: "security", severity: "critical", enabled: true, condition: "trust_score < 50",
+    threshold: 50, cooldownMs: 1800000, lastTriggeredAt: "2025-08-30T03:00:00Z", triggerCount: 3,
+    notifyChannels: ["dashboard", "email", "webhook"],
+  },
+  {
+    id: "rule_004", name: "Unusual Token Usage", description: "Agent token usage is 3x higher than its rolling average",
+    category: "anomaly", severity: "warning", enabled: true, condition: "token_usage > avg * 3",
+    threshold: 3, cooldownMs: 900000, lastTriggeredAt: null, triggerCount: 0,
+    notifyChannels: ["dashboard"],
+  },
+  {
+    id: "rule_005", name: "Slow Response Times", description: "Agent p95 response time exceeds 1000ms",
+    category: "performance", severity: "warning", enabled: true, condition: "p95_response_ms > 1000",
+    threshold: 1000, cooldownMs: 600000, lastTriggeredAt: "2025-08-30T03:45:00Z", triggerCount: 5,
+    notifyChannels: ["dashboard"],
+  },
+  {
+    id: "rule_006", name: "New IP Address", description: "Agent authenticated from an IP address not seen before",
+    category: "security", severity: "info", enabled: true, condition: "new_ip_detected",
+    threshold: 1, cooldownMs: 3600000, lastTriggeredAt: "2025-08-29T14:00:00Z", triggerCount: 1,
+    notifyChannels: ["dashboard"],
+  },
+  {
+    id: "rule_007", name: "Rapid Permission Requests", description: "Agent made more than 50 permission checks in 5 minutes",
+    category: "anomaly", severity: "warning", enabled: false, condition: "permission_checks > 50/5min",
+    threshold: 50, cooldownMs: 300000, lastTriggeredAt: null, triggerCount: 0,
+    notifyChannels: ["dashboard", "webhook"],
+  },
+  {
+    id: "rule_008", name: "Session Idle Timeout", description: "Active session with no activity for more than 30 minutes",
+    category: "health", severity: "info", enabled: true, condition: "session_idle > 30min",
+    threshold: 30, cooldownMs: 1800000, lastTriggeredAt: "2025-08-30T02:30:00Z", triggerCount: 4,
+    notifyChannels: ["dashboard"],
+  },
+];
+
+// --- Alerts ---
+let alertCounter = 0;
+function makeAlert(
+  ruleId: string, ruleName: string, category: AlertCategory, severity: AlertSeverity,
+  title: string, message: string, status: Alert["status"],
+  triggeredAt: string, agentId?: string, agentName?: string,
+): Alert {
+  return {
+    id: `alert_${++alertCounter}`,
+    ruleId, ruleName, category, severity, title, message, status,
+    triggeredAt, acknowledgedAt: status === "acknowledged" ? triggeredAt : null,
+    resolvedAt: status === "resolved" ? triggeredAt : null,
+    acknowledgedBy: status === "acknowledged" ? "admin@acme.com" : null,
+    agentId, agentName,
+  };
+}
+
+export const mockAlerts: Alert[] = [
+  makeAlert("rule_001", "Agent Offline", "health", "critical",
+    "Security Scanner is offline", "Agent missed 100+ heartbeats since 2025-08-25. All tokens revoked.",
+    "acknowledged", "2025-08-25T09:35:00Z", "ag_01H8X9F6G7H8I9J0K1L2M3N4", "Security Scanner"),
+  makeAlert("rule_003", "Trust Score Critical", "security", "critical",
+    "Database Migration Agent trust score critical", "Trust score dropped to 45 (below 50 threshold). High denial rate detected.",
+    "active", "2025-08-30T03:00:00Z", "ag_01H8X9C3D4E5F6G7H8I9J0K1", "Database Migration Agent"),
+  makeAlert("rule_002", "High Denial Rate", "permission", "warning",
+    "Database Migration Agent: 10.7% denial rate", "132 of 1234 actions denied in the last 24 hours.",
+    "active", "2025-08-30T03:30:00Z", "ag_01H8X9C3D4E5F6G7H8I9J0K1", "Database Migration Agent"),
+  makeAlert("rule_005", "Slow Response Times", "performance", "warning",
+    "Data Pipeline Agent: p95 latency > 620ms", "Response times elevated during key rotation. Consider monitoring.",
+    "active", "2025-08-30T03:45:00Z", "ag_01H8X9E5F6G7H8I9J0K1L2M3", "Data Pipeline Agent"),
+  makeAlert("rule_006", "New IP Address", "security", "info",
+    "SDR Outreach Agent: new IP detected", "Agent authenticated from 10.0.2.55 (first seen).",
+    "resolved", "2025-08-29T14:00:00Z", "ag_01H8X9B2C3D4E5F6G7H8I9J0", "SDR Outreach Agent"),
+  makeAlert("rule_008", "Session Idle Timeout", "health", "info",
+    "Database Migration Agent: session idle", "No activity for 43 minutes on session sess_003.",
+    "resolved", "2025-08-30T02:30:00Z", "ag_01H8X9C3D4E5F6G7H8I9J0K1", "Database Migration Agent"),
+];
+
+export type { AgentHealth, AgentSession, Alert, AlertRule };

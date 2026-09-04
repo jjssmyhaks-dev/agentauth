@@ -3,6 +3,7 @@ import { Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { DashboardProvider } from "@/context/DashboardContext";
 import { NotificationProvider } from "@/context/NotificationContext";
+import { AlertProvider } from "@/context/AlertContext";
 import { ThemeProvider } from "@/context/ThemeContext";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import { motion } from "framer-motion";
@@ -22,6 +23,9 @@ const ApiKeysPage = lazy(() => import("@/pages/dashboard/ApiKeysPage"));
 const SettingsPage = lazy(() => import("@/pages/dashboard/SettingsPage"));
 const DocsPage = lazy(() => import("@/pages/dashboard/DocsPage"));
 const NotificationsPage = lazy(() => import("@/pages/dashboard/NotificationsPage"));
+const AgentHealthPage = lazy(() => import("@/pages/dashboard/AgentHealthPage"));
+const AgentSessionsPage = lazy(() => import("@/pages/dashboard/AgentSessionsPage"));
+const AlertsPage = lazy(() => import("@/pages/dashboard/AlertsPage"));
 const ProductPage = lazy(() => import("@/pages/public/ProductPage"));
 const FeaturesPage = lazy(() => import("@/pages/public/FeaturesPage"));
 const PricingPage = lazy(() => import("@/pages/public/PricingPage"));
@@ -86,15 +90,16 @@ function AppRoutes() {
       <Route path="/api-reference" element={<APIReferencePage />} />
       <Route path="/privacy" element={<PrivacyPage />} />
       <Route path="/terms" element={<TermsPage />} />
-      <Route path="/security" element={<SecurityPage />} />
-      <Route
+      <Route path="/security" element={<SecurityPage />} />        <Route
         path="/dashboard"
         element={
           <RequireAuth>
             <NotificationProvider>
-              <DashboardProvider>
-                <DashboardLayout />
-              </DashboardProvider>
+              <AlertProvider>
+                <DashboardProvider>
+                  <DashboardLayout />
+                </DashboardProvider>
+              </AlertProvider>
             </NotificationProvider>
           </RequireAuth>
         }
@@ -109,6 +114,9 @@ function AppRoutes() {
         <Route path="webhooks" element={<WebhooksPage />} />
         <Route path="api-keys" element={<ApiKeysPage />} />
         <Route path="notifications" element={<NotificationsPage />} />
+        <Route path="health" element={<AgentHealthPage />} />
+        <Route path="sessions" element={<AgentSessionsPage />} />
+        <Route path="alerts" element={<AlertsPage />} />
         <Route path="settings" element={<SettingsPage />} />
         <Route path="docs" element={<DocsPage />} />
       </Route>

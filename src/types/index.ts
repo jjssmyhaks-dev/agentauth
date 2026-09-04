@@ -152,3 +152,90 @@ export interface Notification {
   read: boolean;
   createdAt: string;
 }
+
+// Agent Health & Heartbeat
+export type HealthStatus = "healthy" | "degraded" | "unhealthy" | "offline";
+
+export interface AgentHealth {
+  agentId: string;
+  agentName: string;
+  status: HealthStatus;
+  lastHeartbeat: string;
+  heartbeatIntervalMs: number;
+  missedHeartbeats: number;
+  maxMissedHeartbeats: number;
+  uptimePercent: number;
+  avgResponseMs: number;
+  p95ResponseMs: number;
+  p99ResponseMs: number;
+  totalHeartbeats: number;
+  failedHeartbeats: number;
+  responseHistory: number[];
+  statusChanges: StatusChange[];
+}
+
+export interface StatusChange {
+  from: HealthStatus;
+  to: HealthStatus;
+  at: string;
+  reason: string;
+}
+
+// Agent Sessions
+export type SessionStatus = "active" | "expired" | "revoked" | "idle";
+
+export interface AgentSession {
+  id: string;
+  agentId: string;
+  agentName: string;
+  status: SessionStatus;
+  token: string;
+  startedAt: string;
+  lastActivityAt: string;
+  expiresAt: string;
+  endedAt: string | null;
+  durationMs: number | null;
+  tokensUsed: number;
+  actionsPerformed: number;
+  ipAddress: string;
+  userAgent: string;
+  scopes: string[];
+  riskScore: number;
+}
+
+// Alerts
+export type AlertSeverity = "info" | "warning" | "critical";
+export type AlertCategory = "health" | "security" | "permission" | "performance" | "anomaly";
+
+export interface AlertRule {
+  id: string;
+  name: string;
+  description: string;
+  category: AlertCategory;
+  severity: AlertSeverity;
+  enabled: boolean;
+  condition: string;
+  threshold: number;
+  cooldownMs: number;
+  lastTriggeredAt: string | null;
+  triggerCount: number;
+  notifyChannels: ("dashboard" | "email" | "webhook")[];
+}
+
+export interface Alert {
+  id: string;
+  ruleId: string;
+  ruleName: string;
+  category: AlertCategory;
+  severity: AlertSeverity;
+  title: string;
+  message: string;
+  agentId?: string;
+  agentName?: string;
+  status: "active" | "acknowledged" | "resolved";
+  triggeredAt: string;
+  acknowledgedAt: string | null;
+  resolvedAt: string | null;
+  acknowledgedBy: string | null;
+  metadata?: Record<string, unknown>;
+}

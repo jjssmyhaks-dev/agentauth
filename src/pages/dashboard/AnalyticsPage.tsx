@@ -1,6 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useDashboard } from "@/context/DashboardContext";
+import { computeSuccessRate } from "@/lib/stats";
 import { generateTokenUsageData, generateAgentTokenData } from "@/data/mock";
 import { Key, Shield, DollarSign, CheckCircle2, AlertTriangle, Zap } from "lucide-react";
 import { motion } from "framer-motion";
@@ -28,11 +29,9 @@ function StatCard({ label, value, icon: Icon, color, index }: { label: string; v
 
 export default function AnalyticsPage() {
   const { agents, agentStats, totalTokens } = useDashboard();
-  const successRate = agents.length > 0 && agents.reduce((s, a) => s + a.actionsTotal, 0) > 0
-    ? (agents.reduce((s, a) => s + a.actionsAllowed, 0) / agents.reduce((s, a) => s + a.actionsTotal, 0) * 100).toFixed(1)
-    : "0";
+  const successRate = computeSuccessRate(agents);
   const activeAgents = agents.filter((a) => a.status === "active").length;
-  const estCost = (totalTokens * 0.0001).toFixed(2); // totalTokens >= 0 always → never NaN
+  const estCost = (totalTokens * 0.0001).toFixed(2);
 
   const stats = [
     { l: "Total Tokens", v: totalTokens.toLocaleString(), i: Key, c: "bg-muted" },

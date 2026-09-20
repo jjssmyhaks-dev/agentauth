@@ -9,7 +9,7 @@ import { useDashboard } from "@/context/DashboardContext";
 import { useNotifications } from "@/context/NotificationContext";
 import { CheckCircle2, XCircle, Clock } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import type { Approval } from "@/types";
+import { filterApprovals } from "@/lib/stats";
 
 function TimeAgo({ date, slaMinutes = 60 }: { date: string; slaMinutes?: number }) {
   const [text, setText] = useState("");
@@ -44,7 +44,7 @@ export default function ApprovalsPage() {
   const [tab, setTab] = useState("pending");
   const [denyId, setDenyId] = useState<string | null>(null);
   const [denyReason, setDenyReason] = useState("");
-  const filtered = approvals.filter((a) => tab === "all" || a.status === (tab as Approval["status"]));
+  const filtered = filterApprovals(approvals, tab);
 
   const handleApprove = useCallback((id: string) => {
     const approval = approvals.find((a) => a.id === id);

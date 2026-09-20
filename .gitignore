@@ -37,3 +37,7 @@ coverage/
 
 # Misc
 *.tsbuildinfo
+
+# Freebuff desktop app local state (keep the committed run doc)
+.freebuff/*
+!.freebuff/run.md

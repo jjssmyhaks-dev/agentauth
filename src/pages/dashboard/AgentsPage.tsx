@@ -87,7 +87,10 @@ export default function AgentsPage() {
       className: "text-right",
       render: (agent) => (
         <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
-          <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground" title="Rotate Key"><RotateCcw className="h-3.5 w-3.5" /></Button>
+          <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground" title="Rotate Key" onClick={() => {
+            addNotification({ type: "agent", priority: "low", title: `Key rotation started: ${agent.name}`, message: "New Ed25519 key pair generated and registered. Old key remains valid for grace period.", agentId: agent.id, agentName: agent.name, actionUrl: `/dashboard/agents/${agent.id}` });
+            pushToast({ type: "agent", priority: "low", title: "Key rotation started", message: agent.name });
+          }}><RotateCcw className="h-3.5 w-3.5" /></Button>
           {agent.status === "active" && <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive" title="Revoke" onClick={() => setShowRevoke(agent.id)}><Trash2 className="h-3.5 w-3.5" /></Button>}
         </div>
       ),
@@ -95,10 +98,10 @@ export default function AgentsPage() {
   ];
 
   const handleCreate = useCallback(() => {
-    if (!newName) return;
+    if (!newName.trim()) return;
     const id = "ag_" + Date.now().toString(36);
     addAgent({
-      id, name: newName, status: "active", approvalMode: newMode,
+      id, name: newName.trim(), status: "active", approvalMode: newMode,
       publicKey: "ed25519_pk_" + Math.random().toString(36).slice(2, 14),
       fingerprint: "SHA256:" + Math.random().toString(36).slice(2, 10),
       trustLevel: "normal", trustScore: 75, createdAt: new Date().toISOString(),
@@ -106,8 +109,8 @@ export default function AgentsPage() {
       actionsAllowed: 0, actionsDenied: 0, tier: "free", tags: [],
     });
     try { localStorage.setItem("aa_getting_started_agents", "true"); } catch { /* noop */ }
-    addNotification({ type: "agent", priority: "medium", title: `Agent created: ${newName}`, message: `New ${newMode} agent registered with Ed25519 identity`, actionUrl: "/dashboard/agents" });
-    pushToast({ type: "agent", priority: "low", title: "Agent created", message: newName });
+    addNotification({ type: "agent", priority: "medium", title: `Agent created: ${newName.trim()}`, message: `New ${newMode} agent registered with Ed25519 identity`, actionUrl: "/dashboard/agents" });
+    pushToast({ type: "agent", priority: "low", title: "Agent created", message: newName.trim() });
     setNewName(""); setShowCreate(false);
   }, [newName, newMode, addAgent, addNotification, pushToast]);
 

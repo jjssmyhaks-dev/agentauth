@@ -24,7 +24,12 @@ export default function ShortcutsHelp() {
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.key === "?" && !e.metaKey && !e.ctrlKey && !(e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement)) {
+      const target = e.target as HTMLElement | null;
+      const isTyping =
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        (target && (target.isContentEditable || target.tagName === "SELECT"));
+      if (e.key === "?" && !e.metaKey && !e.ctrlKey && !isTyping) {
         e.preventDefault();
         setOpen((prev) => !prev);
       }

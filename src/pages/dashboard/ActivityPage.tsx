@@ -87,7 +87,7 @@ export default function ActivityPage() {
       <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }} className="flex items-center justify-between">
         <div><h1 className="text-2xl font-serif">Audit Log</h1><p className="text-sm text-muted-foreground">Tamper-evident log of every action, token, and approval decision.</p></div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={() => { setVerified(true); setTimeout(() => setVerified(null), 5000); }} className="rounded-full border-hairline"><ShieldCheck className="mr-2 h-3.5 w-3.5" /> Verify Chain Integrity</Button>
+          <Button variant="outline" size="sm" onClick={() => { setVerified(true); window.setTimeout(() => setVerified(null), 5000); }} className="rounded-full border-hairline"><ShieldCheck className="mr-2 h-3.5 w-3.5" /> Verify Chain Integrity</Button>
           <Button variant="outline" size="sm" onClick={handleExport} className="rounded-full border-hairline"><Download className="mr-2 h-3.5 w-3.5" /> Export</Button>
         </div>
       </motion.div>

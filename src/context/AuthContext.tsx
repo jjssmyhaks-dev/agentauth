@@ -19,8 +19,14 @@ const AuthContext = createContext<AuthContextType | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(() => {
-    const saved = localStorage.getItem("aa_user");
-    return saved ? JSON.parse(saved) : null;
+    try {
+      const saved = localStorage.getItem("aa_user");
+      return saved ? (JSON.parse(saved) as User) : null;
+    } catch {
+      // Corrupted persisted user — clear it and fall back to signed-out
+      try { localStorage.removeItem("aa_user"); } catch { /* noop */ }
+      return null;
+    }
   });
   const [isLoading, setIsLoading] = useState(false);
 

@@ -76,6 +76,11 @@ export default function GettingStarted() {
             >
               <Link
                 to={step.href}
+                onClick={(e) => {
+                  if (isDone) {
+                    e.preventDefault();
+                  }
+                }}
                 className={`flex items-center gap-3 rounded-xl border p-3 transition-all group ${
                   isDone
                     ? "border-green-200 bg-green-50/50 dark:border-green-800 dark:bg-green-950/20"

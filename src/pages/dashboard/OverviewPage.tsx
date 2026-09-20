@@ -57,6 +57,8 @@ function LiveFeed() {
     }, 4000);
     return () => clearInterval(i);
   }, []);
+  // Unique React key per item — `_key` is guaranteed unique via the monotonically
+  // increasing counter, so `feedIdCounter` must never be used as the key.
   return (
     <div className="space-y-2">
       <AnimatePresence mode="popLayout">

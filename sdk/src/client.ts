@@ -48,8 +48,16 @@ export class AgentAuthClient {
     });
 
     if (!response.ok) {
-      const error = await response.text();
-      throw new AgentAuthError(`API error: ${response.status} - ${error}`);
+      // Preserve the API's error body — the dashboard and approval flows rely on
+      // structured error details (reason codes), not just the HTTP status.
+      let detail = '';
+      try {
+        const body = await response.json();
+        detail = JSON.stringify(body);
+      } catch {
+        detail = await response.text().catch(() => '');
+      }
+      throw new AgentAuthError(`API error: ${response.status} - ${detail}`);
     }
 
     return response.json();

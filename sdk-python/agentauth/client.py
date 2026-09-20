@@ -88,9 +88,13 @@ class AgentAuthClient:
         token_data = response.json()
 
         self._current_token = token_data["token"]
-        self._token_expires_at = time.mktime(
-            time.strptime(token_data["expires_at"], "%Y-%m-%dT%H:%M:%S.%fZ")
-        )
+        # Parse ISO-8601 timestamp (e.g. "2025-08-30T04:30:00.123Z").
+        # time.strptime/time.mktime assume local time and choke on the "Z"
+        # suffix — use datetime with UTC awareness instead.
+        from datetime import datetime, timezone
+
+        expires_at = token_data["expires_at"].replace("Z", "+00:00")
+        self._token_expires_at = datetime.fromisoformat(expires_at).timestamp()
 
         return self._current_token
 

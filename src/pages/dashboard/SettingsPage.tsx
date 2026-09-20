@@ -25,7 +25,7 @@ export default function SettingsPage() {
       setSaving(false);
       setSaved(true);
       pushToast({ type: "system", priority: "low", title: "Settings saved", message: "Your organization settings have been updated" });
-      setTimeout(() => setSaved(false), 2000);
+      window.setTimeout(() => setSaved(false), 2000);
     }, 600);
   }, [pushToast]);
 

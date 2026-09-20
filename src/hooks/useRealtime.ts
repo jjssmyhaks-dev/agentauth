@@ -90,7 +90,7 @@ export function useRealtime(intervalMs = 8000) {
       const resultIdx = weightedRandom(template.resultWeights);
       const result = resultIdx === 0 ? "allowed" : "denied" as const;
       const ts = new Date().toISOString();
-      const id = `ae_live_${++auditCounter}`;
+      const id = `ae_live_${Date.now()}_${++auditCounter}`;
       const hash = "0x" + Math.random().toString(36).slice(2, 18).padStart(16, "0");
 
       addAuditEntryRef.current({
@@ -117,7 +117,7 @@ export function useRealtime(intervalMs = 8000) {
         if (activeHITL.length > 0) {
           const agent = pickRandom(activeHITL);
           const tmpl = pickRandom(approvalTemplates);
-          const approvalId = `ap_live_${++approvalCounter}`;
+          const approvalId = `ap_live_${Date.now()}_${++approvalCounter}`;
           addApprovalRef.current({
             id: approvalId,
             agentId: agent.id,
@@ -233,7 +233,7 @@ export function useRealtime(intervalMs = 8000) {
         if (activeAgents.length > 0) {
           const agent = pickRandom(activeAgents);
           const newSession = {
-            id: `sess_live_${++sessionCounter}`,
+            id: `sess_live_${Date.now()}_${++sessionCounter}`,
             agentId: agent.id,
             agentName: agent.name,
             status: "active" as const,

@@ -25,13 +25,15 @@ interface NotificationContextType {
 
 const NotificationContext = createContext<NotificationContextType | null>(null);
 
-let notifCounter = 100;
-let toastCounter = 100;
-
 export function NotificationProvider({ children }: { children: ReactNode }) {
   const [notifications, setNotifications] = useState<Notification[]>(mockNotifications);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const toastTimer = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  // Refs (not module-level counters) so IDs stay unique if the provider remounts —
+  // module-level values persist across remounts and would be reused, colliding
+  // with items already rendered from the previous mount.
+  const notifCounter = useRef(100);
+  const toastCounter = useRef(100);
 
   const unreadCount = notifications.filter((n) => !n.read).length;
 
@@ -57,7 +59,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const pushToast = useCallback((t: Omit<Toast, "id">) => {
-    const id = `toast_${++toastCounter}`;
+    const id = `toast_${++toastCounter.current}`;
     const toast: Toast = { ...t, id };
     setToasts((prev) => [...prev.slice(-4), toast]);
 
@@ -72,7 +74,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   const addNotification = useCallback((n: Omit<Notification, "id" | "read" | "createdAt">) => {
     const notif: Notification = {
       ...n,
-      id: `notif_${++notifCounter}`,
+      id: `notif_${++notifCounter.current}`,
       read: false,
       createdAt: new Date().toISOString(),
     };

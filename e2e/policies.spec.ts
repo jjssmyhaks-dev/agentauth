@@ -60,6 +60,16 @@ test.describe("policy engine", () => {
     const agent = agents[0];
 
     // ── 1. Create a deny policy through the dashboard UI ────────────────
+    // Clean slate first: the E2E backend may carry policies from previous
+    // runs, and the spec asserts its own policy is the one that fires.
+    const cleanupResp = await request.get(`${API}/api/v1/policies?org_id=${ORG_ID}`);
+    if (cleanupResp.ok()) {
+      const existing = (await cleanupResp.json()) as Array<{ id: string }>;
+      for (const p of existing) {
+        await request.delete(`${API}/api/v1/policies/${p.id}`);
+      }
+    }
+
     const nav = page.getByRole("navigation", { name: "Dashboard sections" });
     await nav.getByRole("link", { name: /policies/i }).click();
     await expect(page.getByRole("heading", { name: "Policies", exact: true })).toBeVisible({ timeout: 15_000 });

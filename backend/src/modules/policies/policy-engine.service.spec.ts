@@ -2,6 +2,8 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { PolicyEngineService, evaluateCondition, PolicyContext } from './policy-engine.service';
 import { Policy } from '../../database/entities';
+import { GroupsService } from '../groups/groups.service';
+import { WebhookEventsService } from '../webhooks/webhook-events.service';
 
 function makePolicy(overrides: Partial<Policy> & { id: string }): Policy {
   const base: Policy = {
@@ -78,6 +80,8 @@ describe('evaluateCondition', () => {
 describe('PolicyEngineService', () => {
   let service: PolicyEngineService;
   let policies: Policy[];
+  let groupIdsForAgent: jest.Mock;
+  let emit: jest.Mock;
 
   const repoMock = {
     find: jest.fn(async (opts?: any) => {
@@ -88,10 +92,15 @@ describe('PolicyEngineService', () => {
   };
 
   beforeEach(async () => {
+    groupIdsForAgent = jest.fn().mockResolvedValue(['group-1']);
+    emit = jest.fn().mockResolvedValue(undefined);
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         PolicyEngineService,
         { provide: getRepositoryToken(Policy), useValue: repoMock },
+        { provide: GroupsService, useValue: { groupIdsForAgent } },
+        { provide: WebhookEventsService, useValue: { emit } },
       ],
     }).compile();
     service = module.get(PolicyEngineService);
@@ -161,5 +170,69 @@ describe('PolicyEngineService', () => {
     expect(r.result.matched).toBe(true);
     expect(r.result.policy_id).toBe('p-1');
     expect(r.evaluated_order).toHaveLength(1);
+  });
+
+  it('matches agent_group-scoped policies when the agent is a member', async () => {
+    policies = [
+      makePolicy({ id: 'p-group', scope: 'agent_group', scope_target_id: 'group-1', action: 'deny' }),
+      makePolicy({ id: 'p-org', action: 'allow', priority: 5 }),
+    ];
+    const r = await service.evaluate(baseCtx());
+    expect(r.policy_id).toBe('p-group');
+    // Memberships resolved lazily, only because a group-scoped policy exists.
+    expect(groupIdsForAgent).toHaveBeenCalledWith('org-1', 'agent-1');
+  });
+
+  it('group-scoped policy is skipped when the agent is not a member', async () => {
+    groupIdsForAgent.mockResolvedValue([]);
+    policies = [
+      makePolicy({ id: 'p-group', scope: 'agent_group', scope_target_id: 'group-1', action: 'deny' }),
+    ];
+    const r = await service.evaluate(baseCtx());
+    expect(r.matched).toBe(false);
+  });
+
+  it('does not resolve group memberships unless a group-scoped policy exists', async () => {
+    policies = [makePolicy({ id: 'p-org', action: 'allow' })];
+    await service.evaluate(baseCtx());
+    expect(groupIdsForAgent).not.toHaveBeenCalled();
+  });
+
+  it('evaluation still proceeds when the membership lookup fails', async () => {
+    groupIdsForAgent.mockRejectedValue(new Error('groups down'));
+    policies = [
+      makePolicy({ id: 'p-group', scope: 'agent_group', scope_target_id: 'group-1', action: 'deny' }),
+      makePolicy({ id: 'p-org', action: 'allow', priority: 1 }),
+    ];
+    const r = await service.evaluate(baseCtx());
+    // Lookup failed → no membership known → group policy skipped, org policy wins.
+    expect(r.policy_id).toBe('p-org');
+  });
+
+  it('emits policy.denied when a live permission check is denied', async () => {
+    policies = [makePolicy({ id: 'p-deny', action: 'deny' })];
+    await service.evaluate(baseCtx({ resource_type: 'database', resource_id: 'prod-1' }));
+    expect(emit).toHaveBeenCalledTimes(1);
+    expect(emit).toHaveBeenCalledWith(
+      'org-1',
+      'policy.denied',
+      expect.objectContaining({ policy_id: 'p-deny', resource_type: 'database', resource_id: 'prod-1' }),
+    );
+  });
+
+  it('does not emit policy.denied for allows or simulations', async () => {
+    policies = [makePolicy({ id: 'p-allow', action: 'allow' })];
+    await service.evaluate(baseCtx());
+    policies = [makePolicy({ id: 'p-deny', action: 'deny' })];
+    await service.simulate('org-1', baseCtx());
+    expect(emit).not.toHaveBeenCalled();
+  });
+
+  it('a webhook emission failure never changes the decision', async () => {
+    policies = [makePolicy({ id: 'p-deny', action: 'deny' })];
+    emit.mockRejectedValue(new Error('webhook endpoint on fire'));
+    const r = await service.evaluate(baseCtx());
+    expect(r.action).toBe('deny');
+    expect(r.policy_id).toBe('p-deny');
   });
 });

@@ -2,6 +2,8 @@ import { Controller, Get, Post, Put, Delete, Body, Param, Query, BadRequestExcep
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { PoliciesService } from './policies.service';
 import { PolicyEngineService } from './policy-engine.service';
+import { PolicyVersionsService } from './policy-versions.service';
+import { AuditService } from '../audit/audit.service';
 import { IsString, IsOptional, IsInt, IsBoolean, IsUUID, IsObject } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
@@ -27,17 +29,21 @@ export class CreatePolicyDto {
   @ApiProperty({ enum: ['allow', 'require_approval', 'step_up', 'deny'] }) @IsString() action: string;
   @ApiPropertyOptional() @IsOptional() @IsInt() priority?: number;
   @ApiPropertyOptional() @IsOptional() @IsString() description?: string;
+  // TODO: derive from authenticated identity once the dashboard carries API
+  // credentials; accepted from callers today so history is attributable.
+  @ApiPropertyOptional() @IsOptional() @IsString() changed_by?: string;
 }
 
 export class UpdatePolicyDto {
   @ApiPropertyOptional() @IsOptional() @IsString() scope?: string;
   @ApiPropertyOptional() @IsOptional() @IsUUID() scope_target_id?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() trigger?: string;
-  @ApiPropertyOptional() condition?: Record<string, any>;
+  @ApiPropertyOptional() @IsOptional() @IsObject() condition?: Record<string, any>;
   @ApiPropertyOptional() @IsOptional() @IsString() action?: string;
   @ApiPropertyOptional() @IsOptional() @IsInt() priority?: number;
   @ApiPropertyOptional() @IsOptional() @IsBoolean() enabled?: boolean;
   @ApiPropertyOptional() @IsOptional() @IsString() description?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() changed_by?: string;
 }
 
 export class SimulatePolicyDto {
@@ -58,13 +64,33 @@ export class SimulatePolicyDto {
   @ApiPropertyOptional() @IsOptional() @IsInt() current_hour?: number;
 }
 
+/** Dry-run body: same shape as UpdatePolicyDto — nothing is written. */
+export class DryRunPolicyDto extends UpdatePolicyDto {}
+
 @ApiTags('Policies')
 @Controller('v1/policies')
 export class PoliciesController {
   constructor(
     private readonly policiesService: PoliciesService,
     private readonly policyEngine: PolicyEngineService,
+    private readonly versions: PolicyVersionsService,
+    private readonly audit: AuditService,
   ) {}
+
+  /** Best-effort audit entry — history must never break the mutation. */
+  private async auditChange(
+    orgId: string,
+    action: string,
+    policyId: string,
+    changedBy: string | null,
+    result: 'allowed' = 'allowed',
+  ): Promise<void> {
+    try {
+      await this.audit.logEntry(orgId, 'user', changedBy ?? 'system', action, `policy:${policyId}`, result);
+    } catch {
+      /* audit is best-effort */
+    }
+  }
 
   @Post()
   @ApiOperation({ summary: 'Create a policy rule' })
@@ -94,6 +120,8 @@ export class PoliciesController {
       dto.trigger, dto.condition, dto.action,
       dto.priority || 0, dto.description,
     );
+    await this.versions.record(policy, 'created', null, dto.changed_by ?? null);
+    await this.auditChange(dto.org_id, 'policy.created', policy.id, dto.changed_by ?? null);
     return { policy_id: policy.id, status: 'created' };
   }
 
@@ -109,16 +137,46 @@ export class PoliciesController {
     return this.policiesService.findOne(id);
   }
 
+  @Get(':id/versions')
+  @ApiOperation({ summary: 'Version history of a policy (newest first, survives deletion)' })
+  async history(@Param('id') id: string) {
+    return this.versions.listForPolicy(id);
+  }
+
+  @Post(':id/dry-run')
+  @ApiOperation({ summary: 'Compute the field-level diff an update WOULD apply — writes nothing' })
+  async dryRun(@Param('id') id: string, @Body() dto: DryRunPolicyDto) {
+    const { changed_by: _changedBy, ...candidate } = dto;
+    return this.versions.dryRunDiff(id, candidate);
+  }
+
   @Put(':id')
   @ApiOperation({ summary: 'Update a policy' })
   async update(@Param('id') id: string, @Body() dto: UpdatePolicyDto) {
-    return this.policiesService.update(id, dto);
+    const { changed_by: changedBy, ...updates } = dto;
+    const before = await this.policiesService.findOne(id);
+    const policy = await this.policiesService.update(id, updates);
+
+    const trackedKeys = Object.keys(updates).filter(
+      (k) => k !== 'scope_target_id' || updates.scope_target_id !== undefined,
+    );
+    const onlyEnabledFlip =
+      trackedKeys.length === 1 && (trackedKeys[0] === 'enabled' || trackedKeys[1] === 'enabled');
+    const changeType: 'enabled' | 'disabled' | 'updated' =
+      onlyEnabledFlip ? (updates.enabled ? 'enabled' : 'disabled') : 'updated';
+    await this.versions.record(policy, changeType, before, changedBy ?? null);
+    await this.auditChange(policy.org_id, `policy.${changeType}`, policy.id, changedBy ?? null);
+    return policy;
   }
 
   @Delete(':id')
   @ApiOperation({ summary: 'Delete a policy' })
-  async remove(@Param('id') id: string) {
+  async remove(@Param('id') id: string, @Query('changed_by') changedBy?: string) {
+    const before = await this.policiesService.findOne(id);
     await this.policiesService.remove(id);
+    // Tombstone: history (and the audit log) outlive the policy row.
+    await this.versions.record(before, 'deleted', before, changedBy ?? null);
+    await this.auditChange(before.org_id, 'policy.deleted', id, changedBy ?? null);
     return { deleted: true };
   }
 

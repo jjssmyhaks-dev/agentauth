@@ -251,6 +251,32 @@ export interface Policy {
   updatedAt: string;
 }
 
+export interface AgentGroup {
+  id: string;
+  name: string;
+  description: string | null;
+  memberIds: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PolicyVersion {
+  id: string;
+  policyId: string;
+  version: number;
+  snapshot: Partial<Policy>;
+  diff: Record<string, { from: unknown; to: unknown }>;
+  changeType: "created" | "updated" | "enabled" | "disabled" | "deleted";
+  changedBy: string | null;
+  createdAt: string;
+}
+
+export interface PolicyDryRunResult {
+  policyId: string;
+  changes: Record<string, { from: unknown; to: unknown }>;
+  wouldChange: boolean;
+}
+
 export interface PolicySimulationResult {
   wouldFire: boolean;
   policiesChecked: number;

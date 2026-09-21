@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useCallback, useMemo, useEffect, type ReactNode } from "react";
-import type { Agent, Grant, Approval, AuditEntry, ApiKey, Webhook, AgentStats, Policy } from "@/types";
+import type { Agent, Grant, Approval, AuditEntry, ApiKey, Webhook, AgentStats, Policy, AgentGroup } from "@/types";
 import {
   mockAgents,
   mockGrants,
@@ -9,6 +9,7 @@ import {
   mockWebhooks,
   mockAgentStats,
   mockPolicies,
+  mockAgentGroups,
 } from "@/data/mock";
 import { resolveDataSource } from "@/lib/dataSource";
 import { ApiError, type ApiClient } from "@/lib/api/client";
@@ -24,10 +25,13 @@ interface DashboardContextType {
   webhooks: Webhook[];
   agentStats: AgentStats[];
   policies: Policy[];
+  agentGroups: AgentGroup[];
   /** Creates the policy; resolves to the backend id in API mode. */
   addPolicy: (policy: Omit<Policy, "id" | "orgId" | "createdAt" | "updatedAt">) => Promise<string>;
   setPolicyEnabled: (id: string, enabled: boolean) => void;
   deletePolicy: (id: string) => void;
+  addAgentGroup: (name: string, description: string | null, memberIds: string[]) => Promise<string>;
+  deleteAgentGroup: (id: string) => void;
   pendingApprovals: number;
   totalTokens: number;
   totalActions: number;
@@ -63,6 +67,7 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
   const [webhooks, setWebhooks] = useState<Webhook[]>(mockWebhooks);
   const [agentStats] = useState<AgentStats[]>(mockAgentStats);
   const [policies, setPolicies] = useState<Policy[]>(mockPolicies);
+  const [agentGroups, setAgentGroups] = useState<AgentGroup[]>(mockAgentGroups);
 
   const pendingApprovals = useMemo(() => approvals.filter((a) => a.status === "pending").length, [approvals]);
   const totalTokens = useMemo(() => agents.reduce((s, a) => s + a.tokensIssued, 0), [agents]);
@@ -70,13 +75,14 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
 
   // ── API-mode refetch (replaces the mock seed with real data) ─────────
   const refetchAll = useCallback(async (client: NonNullable<Awaited<ReturnType<typeof resolveDataSource>>["client"]>) => {
-    const [fetchedAgents, fetchedGrants, fetchedApprovals, fetchedAudit, fetchedKeys, fetchedPolicies] = await Promise.all([
+    const [fetchedAgents, fetchedGrants, fetchedApprovals, fetchedAudit, fetchedKeys, fetchedPolicies, fetchedGroups] = await Promise.all([
       client.listAgents(),
       client.listGrants(),
       client.listApprovals(),
       client.listAudit(),
       client.listApiKeys(),
       client.listPolicies(),
+      client.listGroups(),
     ]);
     // Authoritative: an empty API list means an empty dashboard — showing
     // mock rows next to real API writes would be actively misleading.
@@ -86,6 +92,7 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
     setAuditLog(fetchedAudit);
     setApiKeys(fetchedKeys);
     setPolicies(fetchedPolicies);
+    setAgentGroups(fetchedGroups);
   }, []);
 
   useEffect(() => {
@@ -351,6 +358,47 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
     [withApi, refetchAll],
   );
 
+  const addAgentGroup = useCallback(
+    async (name: string, description: string | null, memberIds: string[]): Promise<string> => {
+      const localId = "grp_" + Date.now().toString(36);
+      setAgentGroups((prev) => [
+        { id: localId, name, description, memberIds, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+        ...prev,
+      ]);
+      if (dataSource !== "api") return localId;
+      const { client } = await resolveDataSource();
+      if (!client) return localId;
+      try {
+        const apiId = await client.createGroup(name, description ?? undefined, memberIds);
+        await refetchAll(client);
+        return apiId;
+      } catch (err) {
+        if (err instanceof ApiError) {
+          // eslint-disable-next-line no-console
+          console.error(`[agentauth] API write failed (${err.status}): ${err.message}`);
+        } else {
+          // eslint-disable-next-line no-console
+          console.error("[agentauth] API write failed:", err);
+        }
+        return localId;
+      }
+    },
+    [dataSource, refetchAll],
+  );
+
+  const deleteAgentGroup = useCallback(
+    (id: string) => {
+      withApi(
+        () => setAgentGroups((prev) => prev.filter((g) => g.id !== id)),
+        async (client) => {
+          await client.deleteGroup(id);
+          await refetchAll(client);
+        },
+      );
+    },
+    [withApi, refetchAll],
+  );
+
   const incrementAgentTokens = useCallback((agentId: string, delta = 1) => {
     setAgents((prev) =>
       prev.map((a) => (a.id === agentId ? { ...a, tokensIssued: a.tokensIssued + delta, lastActiveAt: new Date().toISOString() } : a)),
@@ -373,11 +421,11 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
     <DashboardContext.Provider
       value={{
         dataSource,
-        agents, grants, approvals, auditLog, apiKeys, webhooks, agentStats, policies,
+        agents, grants, approvals, auditLog, apiKeys, webhooks, agentStats, policies, agentGroups,
         pendingApprovals, totalTokens, totalActions,
         addAgent, updateAgent, addGrant, addApproval, approveRequest, denyRequest, revokeAgent, revokeAllAgents, revokeGrant,
         addApiKey, revokeApiKey, addWebhook, pauseWebhook, addAuditEntry,
-        addPolicy, setPolicyEnabled, deletePolicy,
+        addPolicy, setPolicyEnabled, deletePolicy, addAgentGroup, deleteAgentGroup,
         incrementAgentTokens, incrementAgentActions,
       }}
     >

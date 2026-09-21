@@ -23,8 +23,9 @@ import {
 } from "@/components/ui/dialog";
 import { useDashboard } from "@/context/DashboardContext";
 import { useAuth } from "@/context/AuthContext";
-import type { Policy, PolicyAction, PolicyTrigger, PolicyCondition, PolicyScope } from "@/types";
-import { Plus, Trash2, FlaskConical, ShieldAlert, ShieldCheck, Clock, ArrowUpRight } from "lucide-react";
+import { resolveDataSource } from "@/lib/dataSource";
+import type { Policy, PolicyAction, PolicyTrigger, PolicyCondition, PolicyScope, PolicyVersion, PolicyDryRunResult } from "@/types";
+import { Plus, Trash2, FlaskConical, ShieldAlert, ShieldCheck, Clock, ArrowUpRight, History } from "lucide-react";
 
 const TRIGGERS: { value: PolicyTrigger; label: string; hint: string }[] = [
   { value: "permission_check", label: "Permission check", hint: "Fires on every real-time authorization decision" },
@@ -120,7 +121,7 @@ function evaluateLocally(condition: PolicyCondition, ctx: Record<string, unknown
 const SCOPE_ORDER: Record<PolicyScope, number> = { org: 0, agent_group: 1, agent: 2 };
 
 export default function PoliciesPage() {
-  const { policies, agents, dataSource, addPolicy, setPolicyEnabled, deletePolicy } = useDashboard();
+  const { policies, agents, agentGroups, dataSource, addPolicy, setPolicyEnabled, deletePolicy } = useDashboard();
   const { user } = useAuth();
   const orgName = user?.email ? user.email.split("@")[1] ?? "your org" : "your org";
 
@@ -131,6 +132,7 @@ export default function PoliciesPage() {
   const [description, setDescription] = useState("");
   const [scope, setScope] = useState<PolicyScope>("org");
   const [scopeAgent, setScopeAgent] = useState<string>("");
+  const [scopeGroup, setScopeGroup] = useState<string>("");
   const [trigger, setTrigger] = useState<PolicyTrigger>("permission_check");
   const [action, setAction] = useState<PolicyAction>("require_approval");
   const [priority, setPriority] = useState("50");
@@ -163,6 +165,7 @@ export default function PoliciesPage() {
   const canSubmit =
     !creating &&
     (scope !== "agent" || scopeAgent !== "") &&
+    (scope !== "agent_group" || scopeGroup !== "") &&
     rows.every((r) => r.field && r.value !== "") &&
     description.trim() !== "";
 
@@ -175,7 +178,7 @@ export default function PoliciesPage() {
     try {
       await addPolicy({
         scope,
-        scopeTargetId: scope === "agent" ? scopeAgent : null,
+        scopeTargetId: scope === "agent" ? scopeAgent : scope === "agent_group" ? scopeGroup : null,
         trigger,
         condition,
         action,
@@ -270,6 +273,47 @@ export default function PoliciesPage() {
     }
   };
 
+  // History dialog state
+  const [historyPolicy, setHistoryPolicy] = useState<Policy | null>(null);
+  const [versions, setVersions] = useState<PolicyVersion[] | null>(null);
+  const [dryRun, setDryRun] = useState<PolicyDryRunResult | null>(null);
+  const [dryRunAction, setDryRunAction] = useState<PolicyAction>("deny");
+  const [dryRunPriority, setDryRunPriority] = useState("50");
+  const [dryRunBusy, setDryRunBusy] = useState(false);
+
+  const openHistory = async (p: Policy) => {
+    setHistoryPolicy(p);
+    setVersions(null);
+    setDryRun(null);
+    setDryRunAction(p.action);
+    setDryRunPriority(String(p.priority));
+    if (dataSource !== "api") return;
+    const { client } = await resolveDataSource();
+    if (!client) return;
+    try {
+      setVersions(await client.listPolicyVersions(p.id));
+    } catch {
+      setVersions([]);
+    }
+  };
+
+  const handleDryRun = async () => {
+    if (!historyPolicy) return;
+    setDryRunBusy(true);
+    try {
+      const { client } = await resolveDataSource();
+      if (!client) return;
+      setDryRun(
+        await client.dryRunPolicy(historyPolicy.id, {
+          action: dryRunAction,
+          priority: Number(dryRunPriority) || 0,
+        }),
+      );
+    } finally {
+      setDryRunBusy(false);
+    }
+  };
+
   const actionBadge = (a: PolicyAction) => {
     const meta = ACTIONS.find((x) => x.value === a);
     return <Badge variant={meta?.variant ?? "default"}>{meta?.label ?? a}</Badge>;
@@ -329,7 +373,7 @@ export default function PoliciesPage() {
                       {p.scope === "agent"
                         ? agents.find((a) => a.id === p.scopeTargetId)?.name ?? "agent"
                         : p.scope === "agent_group"
-                          ? "group"
+                          ? agentGroups.find((g) => g.id === p.scopeTargetId)?.name ?? "group"
                           : `${orgName} (org-wide)`}
                     </td>
                     <td className="p-4 font-mono text-xs">{p.priority}</td>
@@ -341,6 +385,15 @@ export default function PoliciesPage() {
                       />
                     </td>
                     <td className="p-4 text-right">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => void openHistory(p)}
+                        aria-label={`View history: ${p.description || p.id}`}
+                      >
+                        <History className="h-4 w-4" aria-hidden="true" />
+                        <span className="sr-only">History</span>
+                      </Button>
                       <Button
                         variant="ghost"
                         size="sm"
@@ -390,6 +443,9 @@ export default function PoliciesPage() {
                   <SelectContent>
                     <SelectItem value="org">Whole organization</SelectItem>
                     <SelectItem value="agent">Specific agent</SelectItem>
+                    <SelectItem value="agent_group" disabled={agentGroups.length === 0}>
+                      Agent group{agentGroups.length === 0 ? " (none yet)" : ""}
+                    </SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -403,6 +459,21 @@ export default function PoliciesPage() {
                     <SelectContent>
                       {agents.map((a) => (
                         <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+              {scope === "agent_group" && (
+                <div className="space-y-2">
+                  <Label htmlFor="policy-group">Agent group</Label>
+                  <Select value={scopeGroup} onValueChange={setScopeGroup}>
+                    <SelectTrigger id="policy-group" className="rounded-xl border-hairline bg-background">
+                      <SelectValue placeholder="Pick a group" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {agentGroups.map((g) => (
+                        <SelectItem key={g.id} value={g.id}>{g.name}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -641,6 +712,118 @@ export default function PoliciesPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowTest(false)} className="rounded-full border-hairline">Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* History + dry-run dialog */}
+      <Dialog open={!!historyPolicy} onOpenChange={(open) => { if (!open) setHistoryPolicy(null); }}>
+        <DialogContent className="max-h-[85vh] overflow-y-auto border-hairline bg-surface sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Policy history</DialogTitle>
+            <DialogDescription className="text-muted-foreground">
+              Every change, who made it, and a dry-run of what a new change would alter.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            {dataSource !== "api" ? (
+              <p className="text-sm text-muted-foreground">
+                Version history requires API mode — the demo's mock data source keeps no history.
+              </p>
+            ) : (
+              <>
+                <div className="space-y-2">
+                  {versions === null ? (
+                    <p className="text-sm text-muted-foreground">Loading history…</p>
+                  ) : versions.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No recorded versions.</p>
+                  ) : (
+                    <ol className="space-y-2">
+                      {versions.map((v) => (
+                        <li key={v.id} className="rounded-xl border border-hairline p-3">
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm font-medium">
+                              v{v.version} · {v.changeType}
+                            </span>
+                            <span className="text-xs text-muted-foreground">
+                              {new Date(v.createdAt).toLocaleString()}
+                            </span>
+                          </div>
+                          <p className="mt-0.5 text-xs text-muted-foreground">by {v.changedBy ?? "system"}</p>
+                          {Object.keys(v.diff).length > 0 && (
+                            <ul className="mt-2 space-y-1">
+                              {Object.entries(v.diff).map(([field, d]) => (
+                                <li key={field} className="font-mono text-xs text-muted-foreground">
+                                  <span className="font-medium text-foreground">{field}</span>: {JSON.stringify(d.from)} → {JSON.stringify(d.to)}
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                        </li>
+                      ))}
+                    </ol>
+                  )}
+                </div>
+
+                {historyPolicy && (
+                  <div className="space-y-3 rounded-xl border border-hairline p-4">
+                    <p className="text-sm font-medium">Dry-run a change</p>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-2">
+                        <Label htmlFor="dry-run-action">Then</Label>
+                        <Select value={dryRunAction} onValueChange={(v) => setDryRunAction(v as PolicyAction)}>
+                          <SelectTrigger id="dry-run-action" className="rounded-xl border-hairline bg-background">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {ACTIONS.map((a) => (
+                              <SelectItem key={a.value} value={a.value}>{a.label}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="dry-run-priority">Priority</Label>
+                        <Input
+                          id="dry-run-priority"
+                          type="number"
+                          value={dryRunPriority}
+                          onChange={(e) => setDryRunPriority(e.target.value)}
+                          className="rounded-xl border-hairline bg-background"
+                        />
+                      </div>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={handleDryRun}
+                      disabled={dryRunBusy}
+                      className="rounded-full border-hairline"
+                    >
+                      <FlaskConical className="mr-2 h-3.5 w-3.5" /> {dryRunBusy ? "Computing…" : "Preview diff"}
+                    </Button>
+                    {dryRun && (
+                      <div role="status" className="rounded-xl border border-hairline p-3">
+                        {dryRun.wouldChange ? (
+                          <ul className="space-y-1">
+                            {Object.entries(dryRun.changes).map(([field, d]) => (
+                              <li key={field} className="font-mono text-xs text-muted-foreground">
+                                <span className="font-medium text-foreground">{field}</span>: {JSON.stringify(d.from)} → {JSON.stringify(d.to)}
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className="text-sm text-muted-foreground">No changes — this candidate is identical.</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setHistoryPolicy(null)} className="rounded-full border-hairline">Close</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

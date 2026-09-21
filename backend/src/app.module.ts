@@ -9,6 +9,7 @@ import { GrantsModule } from './modules/grants/grants.module';
 import { AuditModule } from './modules/audit/audit.module';
 import { ApprovalModule } from './modules/approval/approval.module';
 import { WebhooksModule } from './modules/webhooks/webhooks.module';
+import { GroupsModule } from './modules/groups/groups.module';
 import { OrgsModule } from './modules/orgs/orgs.module';
 import { RateLimiterMiddleware } from './common/middleware/rate-limiter.middleware';
 import { AppController } from './app.controller';
@@ -16,7 +17,7 @@ import { AppService } from './app.service';
 import {
   Organization, User, Agent, Grant, TokenIssued,
   PendingApproval, AuditLog, Webhook,
-  Policy, TrustScore, TrustEvent, Session,
+  Policy, PolicyVersion, TrustScore, TrustEvent, Session,
   EnvironmentFingerprint, AgentKey, AgentAttribute,
   AgentGroup, SyncSource, SyncJob, DocEmbedding,
   AgentUsage,
@@ -49,7 +50,7 @@ import { AnalyticsModule } from './modules/analytics/analytics.module';
       entities: [
         Organization, User, Agent, Grant, TokenIssued,
         PendingApproval, AuditLog, Webhook,
-        Policy, TrustScore, TrustEvent, Session,
+        Policy, PolicyVersion, TrustScore, TrustEvent, Session,
         EnvironmentFingerprint, AgentKey, AgentAttribute,
         AgentGroup, SyncSource, SyncJob, DocEmbedding,
       ],
@@ -67,6 +68,7 @@ import { AnalyticsModule } from './modules/analytics/analytics.module';
     AuditModule,
     ApprovalModule,
     WebhooksModule,
+    GroupsModule,
     OrgsModule,
     PoliciesModule,
     TrustModule,

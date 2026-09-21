@@ -1,4 +1,4 @@
-import type { Agent, Grant, Approval, AuditEntry, ApiKey, Webhook, AgentStats, Org, Notification, AgentHealth, AgentSession, Alert, AlertRule, AlertCategory, AlertSeverity, Policy } from "@/types";
+import type { Agent, Grant, Approval, AuditEntry, ApiKey, Webhook, AgentStats, Org, Notification, AgentHealth, AgentSession, Alert, AlertRule, AlertCategory, AlertSeverity, Policy, AgentGroup } from "@/types";
 
 function hashCode(str: string): string {
   let hash = 0;
@@ -428,6 +428,25 @@ export const mockPolicies: Policy[] = [
     description: "Untrusted agents must re-verify before acting",
     createdAt: "2025-08-12T09:00:00Z",
     updatedAt: "2025-08-18T11:00:00Z",
+  },
+];
+
+export const mockAgentGroups: AgentGroup[] = [
+  {
+    id: "grp_001",
+    name: "Database Admins",
+    description: "Agents with production database access",
+    memberIds: ["ag_01H8X9C3D4E5F6G7H8I9J0K1"],
+    createdAt: "2025-08-01T09:00:00Z",
+    updatedAt: "2025-08-20T14:30:00Z",
+  },
+  {
+    id: "grp_002",
+    name: "Read-Only Analysts",
+    description: "Reporting agents — read grants only",
+    memberIds: ["ag_01H8X9A1B2C3D4E5F6G7H8I9", "ag_01H8X9B2C3D4E5F6G7H8I9J0"],
+    createdAt: "2025-08-05T09:00:00Z",
+    updatedAt: "2025-08-15T09:00:00Z",
   },
 ];
 

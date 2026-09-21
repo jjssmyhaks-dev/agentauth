@@ -2,7 +2,7 @@ import { Outlet, Link, useLocation } from "react-router-dom";
 import {
   LayoutDashboard, Shield, KeyRound, CheckSquare, Activity, BarChart3,
   Webhook, Key, Settings, BookOpen, LogOut, ChevronLeft, Menu,
-  Bell, Search, BellRing, HeartPulse, MonitorSmartphone, ShieldAlert, ScrollText,
+  Bell, Search, BellRing, HeartPulse, MonitorSmartphone, ShieldAlert, ScrollText, Users,
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -24,6 +24,7 @@ import OnboardingWizard from "./OnboardingWizard"
 const navItems = [
   { icon: LayoutDashboard, label: "Overview", path: "/dashboard" },
   { icon: Shield, label: "Agents", path: "/dashboard/agents" },
+  { icon: Users, label: "Groups", path: "/dashboard/groups" },
   { icon: KeyRound, label: "Grants", path: "/dashboard/grants" },
   { icon: ScrollText, label: "Policies", path: "/dashboard/policies" },
   { icon: CheckSquare, label: "Approvals", path: "/dashboard/approvals" },

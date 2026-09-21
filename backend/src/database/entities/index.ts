@@ -7,6 +7,7 @@ export { PendingApproval } from './pending-approval.entity';
 export { AuditLog } from './audit-log.entity';
 export { Webhook } from './webhook.entity';
 export { Policy } from './policy.entity';
+export { PolicyVersion } from './policy-version.entity';
 export { TrustScore } from './trust-score.entity';
 export { TrustEvent } from './trust-event.entity';
 export { Session } from './session.entity';

@@ -2,6 +2,8 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Policy } from '../../database/entities';
+import { GroupsService } from '../groups/groups.service';
+import { WebhookEventsService } from '../webhooks/webhook-events.service';
 
 /**
  * Contextual facts available to policy conditions. The permission-check flow
@@ -146,6 +148,8 @@ export class PolicyEngineService {
   constructor(
     @InjectRepository(Policy)
     private policyRepo: Repository<Policy>,
+    private groupsService: GroupsService,
+    private webhookEvents: WebhookEventsService,
   ) {}
 
   /**
@@ -162,6 +166,18 @@ export class PolicyEngineService {
     });
 
     const matchingTrigger = policies.filter((p) => p.trigger === ctx.trigger);
+
+    // agent_group-scoped policies need the agent's memberships. Looked up
+    // lazily (only when such policies exist) and scoped to the org by the
+    // groups service.
+    if (matchingTrigger.some((p) => p.scope === 'agent_group') && !ctx.agent_group_ids) {
+      try {
+        ctx.agent_group_ids = await this.groupsService.groupIdsForAgent(ctx.org_id, ctx.agent_id);
+      } catch (err) {
+        this.logger.warn(`Failed to resolve group memberships for agent ${ctx.agent_id}: ${err}`);
+        ctx.agent_group_ids = [];
+      }
+    }
 
     const scopeOrder: Record<string, number> = { org: 0, agent_group: 1, agent: 2 };
     const sorted = matchingTrigger.sort((a, b) => {
@@ -196,6 +212,27 @@ export class PolicyEngineService {
     if (matched.length === 0) return { matched: false, action: 'allow' };
     const first = matched[0];
     this.logger.log(`Policy ${first.policy_id} matched for agent ${ctx.agent_id}: ${first.action}`);
+
+    // Real-time security signal: whenever a live permission check is denied
+    // by a policy, let subscribed webhooks know. Simulations and non-deny
+    // outcomes stay silent; a failed emission never affects the decision.
+    if (ctx.trigger === 'permission_check' && first.action === 'deny') {
+      try {
+        await this.webhookEvents.emit(ctx.org_id, 'policy.denied', {
+          policy_id: first.policy_id,
+          policy_action: first.action,
+          reason: first.reason,
+          agent_id: ctx.agent_id,
+          resource_type: ctx.resource_type,
+          resource_id: ctx.resource_id,
+          attempted_action: ctx.action,
+        });
+      } catch (err) {
+        // A dead consumer must never delay or corrupt the authorization decision.
+        this.logger.warn(`policy.denied webhook emission failed: ${err}`);
+      }
+    }
+
     return { matched: true, ...first };
   }
 

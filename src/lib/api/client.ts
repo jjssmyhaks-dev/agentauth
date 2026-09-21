@@ -4,7 +4,7 @@
  * (src/types/index.ts). Fields the API does not provide yet (trust score,
  * tags, tiers) are filled with sensible defaults rather than faked data.
  */
-import type { Agent, Grant, Approval, AuditEntry, ApiKey, Action, Policy, PolicySimulationResult } from "@/types";
+import type { Agent, Grant, Approval, AuditEntry, ApiKey, Action, Policy, PolicySimulationResult, AgentGroup, PolicyVersion, PolicyDryRunResult } from "@/types";
 import { DEFAULT_ORG_ID } from "./config";
 
 /** Fixed, valid-UUID actor for dashboard-initiated decisions. */
@@ -257,6 +257,69 @@ function mapApiKey(raw: RawApiKey): ApiKey {
   };
 }
 
+interface RawGroup {
+  id: string;
+  org_id?: string;
+  name: string;
+  description?: string | null;
+  member_ids?: string[];
+  created_at?: string;
+  updated_at?: string;
+}
+
+interface RawPolicyVersion {
+  id: string;
+  policy_id: string;
+  version: number;
+  snapshot: Record<string, unknown>;
+  diff: Record<string, { from: unknown; to: unknown }>;
+  change_type: string;
+  changed_by?: string | null;
+  created_at?: string;
+}
+
+interface RawDryRun {
+  policy_id: string;
+  changes: Record<string, { from: unknown; to: unknown }>;
+  would_change: boolean;
+}
+
+function mapGroup(raw: RawGroup): AgentGroup {
+  return {
+    id: raw.id,
+    name: raw.name,
+    description: raw.description ?? null,
+    memberIds: raw.member_ids ?? [],
+    createdAt: raw.created_at ?? new Date().toISOString(),
+    updatedAt: raw.updated_at ?? raw.created_at ?? new Date().toISOString(),
+  };
+}
+
+const VERSION_CHANGE_TYPES = ["created", "updated", "enabled", "disabled", "deleted"] as const;
+
+function mapPolicyVersion(raw: RawPolicyVersion): PolicyVersion {
+  return {
+    id: raw.id,
+    policyId: raw.policy_id,
+    version: raw.version,
+    snapshot: raw.snapshot ?? {},
+    diff: raw.diff ?? {},
+    changeType: (VERSION_CHANGE_TYPES as readonly string[]).includes(raw.change_type)
+      ? (raw.change_type as PolicyVersion["changeType"])
+      : "updated",
+    changedBy: raw.changed_by ?? null,
+    createdAt: raw.created_at ?? new Date().toISOString(),
+  };
+}
+
+function mapDryRun(raw: RawDryRun): PolicyDryRunResult {
+  return {
+    policyId: raw.policy_id,
+    changes: raw.changes ?? {},
+    wouldChange: raw.would_change ?? false,
+  };
+}
+
 interface RawPolicy {
   id: string;
   org_id: string;
@@ -426,6 +489,36 @@ export function createApiClient(baseUrl: string) {
         headers: { "x-org-id": DEFAULT_ORG_ID },
         body: JSON.stringify({ name, scopes: ["read"] }),
       }).then(mapApiKey),
+
+    listGroups: () =>
+      req<unknown>("/v1/groups", { query: { org_id: DEFAULT_ORG_ID } }).then((rows) =>
+        asArray<RawGroup>(rows).map(mapGroup),
+      ),
+    createGroup: (name: string, description?: string, agentIds: string[] = []) =>
+      req<{ group_id: string }>("/v1/groups", {
+        method: "POST",
+        body: JSON.stringify({ org_id: DEFAULT_ORG_ID, name, description }),
+      })
+        .then((r) =>
+          agentIds.length > 0
+            ? req(`/v1/groups/${encodeURIComponent(r.group_id)}/members?org_id=${DEFAULT_ORG_ID}`, {
+                method: "PUT",
+                body: JSON.stringify({ agent_ids: agentIds }),
+              }).then(() => r.group_id)
+            : r.group_id,
+        ),
+    deleteGroup: (id: string) =>
+      req(`/v1/groups/${encodeURIComponent(id)}?org_id=${DEFAULT_ORG_ID}`, { method: "DELETE" }),
+
+    listPolicyVersions: (policyId: string) =>
+      req<unknown>(`/v1/policies/${encodeURIComponent(policyId)}/versions`, {
+        query: { org_id: DEFAULT_ORG_ID },
+      }).then((rows) => asArray<RawPolicyVersion>(rows).map(mapPolicyVersion)),
+    dryRunPolicy: (id: string, updates: Partial<Pick<Policy, "action" | "priority" | "enabled" | "description">>) =>
+      req<RawDryRun>(`/v1/policies/${encodeURIComponent(id)}/dry-run`, {
+        method: "POST",
+        body: JSON.stringify(updates),
+      }).then(mapDryRun),
 
     listPolicies: () =>
       req<unknown>("/v1/policies", { query: { org_id: DEFAULT_ORG_ID } }).then((rows) =>

@@ -72,7 +72,10 @@ test.describe("golden path", () => {
     await page.reload();
 
     // ── 5. Approve it in the UI ─────────────────────────────────────────
-    await page.getByRole("link", { name: "Approvals", exact: true }).click();
+    // The sidebar link's accessible name includes the pending badge
+    // ("Pending approvals: N") — match by regex inside the nav.
+    const nav = page.getByRole("navigation", { name: "Dashboard sections" });
+    await nav.getByRole("link", { name: /approvals/i }).click();
     await expect(page.getByText(agentName).first()).toBeVisible({ timeout: 15_000 });
     const pendingTab = page.getByRole("tab", { name: /^Pending \(\d+\)$/ });
     const countBefore = Number((await pendingTab.textContent())?.match(/\d+/)?.[0] ?? 0);

@@ -1,0 +1,25 @@
+# Build context hygiene — keep node_modules, build output and secrets out of
+# the docker build context. Without this, `docker build` uploads the entire
+# repo (including every node_modules and .next) on every build.
+**/node_modules
+**/.next
+**/dist
+**/build
+**/.turbo
+**/coverage
+**/e2e-results
+**/playwright-report
+**/test-results
+**/.env
+**/.env.*
+!**/.env.example
+**/*.log
+**/__pycache__
+**/.git
+**/.freebuff
+**/.venv
+**/venv
+**/.pytest_cache
+**/.ruff_cache
+frontend/.next
+backend/dist

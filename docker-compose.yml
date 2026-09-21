@@ -1,8 +1,9 @@
 # AgentAuth local stack: Postgres + Redis + API + dashboard.
 #   docker compose up --build
-#   dashboard  → http://localhost:5173   (VITE_API_URL=http://localhost:4000 preset)
+#   dashboard  → http://localhost:3000   (Next.js dashboard served from the image)
 #   API docs   → http://localhost:4000/docs
-# API keys are seeded — see POSTGRES env below / backend/README.
+# The root Vite dashboard is not in the image — run it with `npm run dev` and
+# VITE_API_URL=http://localhost:4000, or grab its static bundle from a Release.
 services:
   db:
     image: postgres:16-alpine
@@ -55,14 +56,12 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    # Run only the dashboard (root Vite app) stage.
-    command: ["sh", "-c", "npx serve -l 5173 dist"]
+    # The image ships backend + Next.js standalone server (see Dockerfile).
+    command: ["node", "server.js"]
     depends_on:
       - api
-    environment:
-      VITE_API_URL: http://localhost:4000
     ports:
-      - "5173:5173"
+      - "3000:3000"
 
 volumes:
   pgdata:

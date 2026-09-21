@@ -83,7 +83,9 @@ test.describe("policy engine", () => {
     await page.getByRole("option").first().click();
     await page.getByRole("button", { name: /run simulation/i }).click();
     await expect(page.getByText(/would be denied|Decision:/)).toBeVisible({ timeout: 15_000 });
-    await page.getByRole("button", { name: "Close" }).click();
+    // exact: true — the primitive's X is sr-only "Close dialog" and "Close"
+    // is a substring of it, so default matching would be ambiguous.
+    await page.getByRole("button", { name: "Close", exact: true }).click();
 
     // ── 3. The engine really denies a matched grant in the live flow ────
     // Mint a token via the challenge flow, then check a database:read that

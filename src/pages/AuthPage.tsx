@@ -42,7 +42,7 @@ export default function AuthPage() {
   const [isSignUp, setIsSignUp] = useState(false);
   const [error, setError] = useState("");
   const [rememberMe, setRememberMe] = useState(true);
-  const { signIn, signUp, isLoading } = useAuth();
+  const { signIn, signUp, isLoading, apiKey, setApiKey } = useAuth();
   const navigate = useNavigate();
 
   const strength = useMemo(() => getPasswordStrength(password), [password]);
@@ -166,6 +166,26 @@ export default function AuthPage() {
               {isSignUp ? "Already have an account? Sign in" : "Don't have an account? Create one"}
             </button>
           </div>
+          <details className="mt-4 border-t border-hairline pt-3">
+            <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground transition-colors select-none">
+              Connect with an API key (operator access)
+            </summary>
+            <div className="mt-3">
+              <label htmlFor="aa-api-key" className="block text-xs mb-1.5 text-muted-foreground">API key</label>
+              <input
+                id="aa-api-key"
+                type="password"
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+                autoComplete="off"
+                placeholder="ak_…"
+                className="w-full rounded-xl border border-hairline bg-background px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-ring transition-shadow"
+              />
+              <p className="mt-1.5 text-xs text-muted-foreground">
+                Sent as a Bearer token on every dashboard→API call. Created by an org admin under API Keys.
+              </p>
+            </div>
+          </details>
         </motion.div>
       </motion.div>
     </div>

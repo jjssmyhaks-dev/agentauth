@@ -1,7 +1,8 @@
-import { Controller, Post, Get, Body, Param, Query } from '@nestjs/common';
+import { Controller, Post, Get, Body, Param, Query, Req } from '@nestjs/common';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { IdentityService } from './identity.service';
 import { RegisterAgentDto, RotateKeyDto } from '../../common/dto';
+import { orgFrom } from '../policies/policies-org.helper';
 
 @ApiTags('Identity')
 @Controller('v1/agents')
@@ -9,9 +10,9 @@ export class IdentityController {
   constructor(private readonly identityService: IdentityService) {}
 
   @Post()
-  @ApiOperation({ summary: 'Register a new agent' })
-  async register(@Body() dto: RegisterAgentDto) {
-    const agent = await this.identityService.register(dto.org_id, dto.name, dto.public_key);
+  @ApiOperation({ summary: 'Register a new agent (org from the bearer key when present)' })
+  async register(@Req() request: any, @Body() dto: RegisterAgentDto) {
+    const agent = await this.identityService.register(orgFrom(request, dto.org_id), dto.name, dto.public_key);
     return { agent_id: agent.id, status: agent.status, created_at: agent.created_at };
   }
 
@@ -22,9 +23,9 @@ export class IdentityController {
   }
 
   @Get()
-  @ApiOperation({ summary: 'List all agents for an org' })
-  async findAll(@Query('org_id') orgId: string) {
-    return this.identityService.findAllByOrg(orgId);
+  @ApiOperation({ summary: 'List all agents for the resolved org' })
+  async findAll(@Req() request: any, @Query('org_id') orgId: string) {
+    return this.identityService.findAllByOrg(orgFrom(request, orgId));
   }
 
   @Post(':id/rotate-key')

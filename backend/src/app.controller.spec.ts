@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { TokenService } from './modules/token/token.service';
+import { AuthService } from './modules/auth/auth.service';
 import { RedisService } from './common/redis/redis.service';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { TokenIssued, Organization } from './database/entities';
@@ -17,6 +18,16 @@ describe('AppController', () => {
         {
           provide: TokenService,
           useValue: { getJwks: jest.fn().mockReturnValue({ keys: [] }) },
+        },
+        {
+          provide: AuthService,
+          useValue: {
+            authenticate: jest.fn(),
+            listKeys: jest.fn().mockResolvedValue([]),
+            createKey: jest.fn(),
+            revokeKey: jest.fn(),
+            ensureBootstrapKey: jest.fn().mockResolvedValue(undefined),
+          },
         },
         {
           provide: getRepositoryToken(TokenIssued),

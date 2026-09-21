@@ -1,4 +1,27 @@
 import { defineConfig, devices } from "@playwright/test";
+import { readFileSync } from "fs";
+
+// Load .env.e2e (gitignored) when present — lets local runs pin a stable
+// control-plane key without touching CI secrets. Format: KEY=value lines.
+try {
+  for (const line of readFileSync(".env.e2e", "utf8").split("\n")) {
+    const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/);
+    if (m && !process.env[m[1]]) process.env[m[1]] = m[2].replace(/^['"]|['"]$/g, "");
+  }
+} catch {
+  /* no .env.e2e — fine */
+}
+
+/**
+ * Control-plane key for the E2E run. The backend ensures BOOTSTRAP_API_KEY
+ * exists on boot (AuthService.ensureBootstrapKey), and the specs attach the
+ * same value as Bearer. Overridable per environment via E2E_API_KEY
+ * (e.g. a CI secret); the default below is a test-only throwaway, never
+ * used outside the E2E backend instance.
+ */
+const E2E_KEY = process.env.E2E_API_KEY ?? "ak_e2e_local_bootstrap_0000000000000000";
+// Propagate to the test workers (e2e/auth.ts reads it from process.env).
+process.env.E2E_API_KEY = process.env.E2E_API_KEY ?? E2E_KEY;
 
 const API_PORT = 4123;
 const APP_PORT = 4173;
@@ -41,6 +64,7 @@ export default defineConfig({
         REDIS_URL: process.env.E2E_REDIS_URL ?? "redis://localhost:6379",
         NODE_ENV: "development",
         CORS_ORIGIN: `http://127.0.0.1:${APP_PORT}`,
+        BOOTSTRAP_API_KEY: E2E_KEY,
       },
     },
     {

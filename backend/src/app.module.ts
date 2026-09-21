@@ -1,8 +1,11 @@
 import * as path from 'path';
 import { Module, MiddlewareConsumer, NestModule, RequestMethod } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { RedisModule } from './common/redis/redis.module';
+import { AuthModule } from './modules/auth/auth.module';
+import { ApiKeyGuard } from './modules/auth/api-key.guard';
 import { IdentityModule } from './modules/identity/identity.module';
 import { TokenModule } from './modules/token/token.module';
 import { GrantsModule } from './modules/grants/grants.module';
@@ -17,9 +20,9 @@ import { AppService } from './app.service';
 import {
   Organization, User, Agent, Grant, TokenIssued,
   PendingApproval, AuditLog, Webhook,
-  Policy, PolicyVersion, TrustScore, TrustEvent, Session,
+  Policy, PolicyVersion, TrustScore, TrustEvent, Session, ApiKey,
   EnvironmentFingerprint, AgentKey, AgentAttribute,
-  AgentGroup, SyncSource, SyncJob, DocEmbedding,
+  AgentGroup, SyncSource, SyncJob, DocEmbedding, DelegatedToken,
   AgentUsage,
 } from './database/entities';
 import { PoliciesModule } from './modules/policies/policies.module';
@@ -44,16 +47,17 @@ import { AnalyticsModule } from './modules/analytics/analytics.module';
       ],
     }),
     RedisModule,
+    AuthModule,
     TypeOrmModule.forRoot({
       type: 'postgres',
       url: process.env.DATABASE_URL,
-      entities: [
-        Organization, User, Agent, Grant, TokenIssued,
-        PendingApproval, AuditLog, Webhook,
-        Policy, PolicyVersion, TrustScore, TrustEvent, Session,
-        EnvironmentFingerprint, AgentKey, AgentAttribute,
-        AgentGroup, SyncSource, SyncJob, DocEmbedding,
-      ],
+      entities: [  Organization, User, Agent, Grant, TokenIssued,
+  PendingApproval, AuditLog, Webhook,
+  Policy, PolicyVersion, TrustScore, TrustEvent, Session, ApiKey,
+  EnvironmentFingerprint, AgentKey, AgentAttribute,
+  AgentGroup, SyncSource, SyncJob, DocEmbedding,
+  DelegatedToken,
+    ],
       ssl: process.env.DATABASE_URL?.includes('sslmode=require')
         ? { rejectUnauthorized: false }
         : false,
@@ -82,7 +86,7 @@ import { AnalyticsModule } from './modules/analytics/analytics.module';
     AnalyticsModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [AppService, { provide: APP_GUARD, useClass: ApiKeyGuard }],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {

@@ -7,6 +7,7 @@ import { TokenModule } from '../token/token.module';
 import { IdentityModule } from '../identity/identity.module';
 import { PoliciesModule } from '../policies/policies.module';
 import { AuditModule } from '../audit/audit.module';
+import { ApprovalModule } from '../approval/approval.module';
 
 @Module({
   imports: [
@@ -15,6 +16,7 @@ import { AuditModule } from '../audit/audit.module';
     IdentityModule,
     PoliciesModule,
     AuditModule,
+    ApprovalModule,
   ],
   controllers: [GrantsController],
   providers: [GrantsService],

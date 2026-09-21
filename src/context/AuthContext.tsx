@@ -10,6 +10,9 @@ interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  /** Bearer API key for control-plane calls (empty in mock/demo mode). */
+  apiKey: string;
+  setApiKey: (key: string) => void;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string, name: string) => Promise<void>;
   signOut: () => void;
@@ -29,6 +32,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   });
   const [isLoading, setIsLoading] = useState(false);
+  const [apiKey, setApiKeyState] = useState<string>(() => localStorage.getItem("aa_api_key") ?? "");
+
+  const setApiKey = useCallback((key: string) => {
+    setApiKeyState(key);
+    if (key) localStorage.setItem("aa_api_key", key);
+    else localStorage.removeItem("aa_api_key");
+  }, []);
 
   const signIn = useCallback(async (email: string, _password: string) => {
     setIsLoading(true);
@@ -51,10 +61,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signOut = useCallback(() => {
     setUser(null);
     localStorage.removeItem("aa_user");
+    setApiKeyState("");
+    localStorage.removeItem("aa_api_key");
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, isAuthenticated: !!user, isLoading, signIn, signUp, signOut }}>
+    <AuthContext.Provider value={{ user, isAuthenticated: !!user, isLoading, apiKey, setApiKey, signIn, signUp, signOut }}>
       {children}
     </AuthContext.Provider>
   );

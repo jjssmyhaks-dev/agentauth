@@ -1,6 +1,7 @@
-import { Controller, Get, Post, Body, Query, Res } from '@nestjs/common';
+import { Controller, Get, Post, Body, Query, Res, Req } from '@nestjs/common';
 import { Response } from 'express';
 import { AuditService } from './audit.service';
+import { orgFrom } from '../policies/policies-org.helper';
 
 @Controller('v1/audit')
 export class AuditController {
@@ -35,6 +36,7 @@ export class AuditController {
 
   @Get()
   async queryLogs(
+    @Req() request: any,
     @Query('org_id') orgId: string,
     @Query('agent_id') agentId?: string,
     @Query('from') from?: string,
@@ -44,7 +46,7 @@ export class AuditController {
     @Query('limit') limit?: string,
   ) {
     return this.auditService.queryLogs(
-      orgId,
+      orgFrom(request, orgId),
       agentId,
       from ? new Date(from) : undefined,
       to ? new Date(to) : undefined,
@@ -56,12 +58,13 @@ export class AuditController {
 
   @Get('verify-chain')
   async verifyChain(
+    @Req() request: any,
     @Query('org_id') orgId: string,
     @Query('from') from?: string,
     @Query('to') to?: string,
   ) {
     return this.auditService.verifyChain(
-      orgId,
+      orgFrom(request, orgId),
       from ? new Date(from) : undefined,
       to ? new Date(to) : undefined,
     );
@@ -69,14 +72,16 @@ export class AuditController {
 
   @Get('export')
   async exportLogs(
+    @Req() request: any,
     @Query('org_id') orgId: string,
     @Query('format') format: 'csv' | 'json',
     @Query('from') from?: string,
     @Query('to') to?: string,
     @Res() res?: Response,
   ) {
+    const resolvedOrg = orgFrom(request, orgId);
     const data = await this.auditService.exportLogs(
-      orgId,
+      resolvedOrg,
       format,
       from ? new Date(from) : undefined,
       to ? new Date(to) : undefined,
@@ -84,7 +89,7 @@ export class AuditController {
 
     if (format === 'csv') {
       res?.setHeader('Content-Type', 'text/csv');
-      res?.setHeader('Content-Disposition', `attachment; filename="audit-log-${orgId}.csv"`);
+      res?.setHeader('Content-Disposition', `attachment; filename="audit-log-${resolvedOrg}.csv"`);
     } else {
       res?.setHeader('Content-Type', 'application/json');
     }

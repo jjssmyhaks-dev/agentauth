@@ -2,6 +2,7 @@ import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { TrustScore, TrustEvent, Agent } from '../../database/entities';
+import { TriggerEmittersService } from '../policies/trigger-emitters.service';
 
 @Injectable()
 export class TrustService {
@@ -14,6 +15,7 @@ export class TrustService {
     private trustEventRepo: Repository<TrustEvent>,
     @InjectRepository(Agent)
     private agentRepo: Repository<Agent>,
+    private triggerEmitters: TriggerEmittersService,
   ) {}
 
   // Scoring rules
@@ -84,6 +86,20 @@ export class TrustService {
     await this.trustScoreRepo.save(score);
 
     this.logger.log(`Trust event ${eventType} for agent ${agentId}: delta ${rule.delta}, new score ${score.score}`);
+
+    // Async policy trigger: when trust drops below "normal", let
+    // trust_below_threshold policies decide (best-effort, never blocks).
+    if (score.level === 'questionable' || score.level === 'untrusted') {
+      try {
+        const agent = await this.agentRepo.findOne({ where: { id: agentId } });
+        if (agent?.org_id) {
+          await this.triggerEmitters.trustBelowThreshold(agent.org_id, agentId, score.score, score.level);
+        }
+      } catch (err) {
+        this.logger.warn(`trust_below_threshold trigger failed: ${err}`);
+      }
+    }
+
     return { trust_score: score, event };
   }
 

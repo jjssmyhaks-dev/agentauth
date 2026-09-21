@@ -31,7 +31,9 @@ export function resolveDataSource(): Promise<Resolved> {
         // eslint-disable-next-line no-console
         console.info(`[agentauth] data source: api (${API_BASE_URL})`);
         mode = "api";
-        client = createApiClient(API_BASE_URL);
+        const apiKey =
+          typeof window !== "undefined" ? localStorage.getItem("aa_api_key") ?? undefined : undefined;
+        client = createApiClient(API_BASE_URL, apiKey);
       } else if (API_BASE_URL) {
         // eslint-disable-next-line no-console
         console.warn(

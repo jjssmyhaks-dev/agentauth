@@ -74,6 +74,9 @@
       "**/*.(t|j)s"
     ],
     "coverageDirectory": "../coverage",
-    "testEnvironment": "node"
+    "testEnvironment": "node",
+    "moduleNameMapper": {
+      "^@knocklabs/node$": "<rootDir>/../test/mocks/knock.mock.ts"
+    }
   }
 }

@@ -7,9 +7,13 @@ import { TokenService } from '../token/token.service';
 import { IdentityService } from '../identity/identity.service';
 import { PolicyEngineService } from '../policies/policy-engine.service';
 import { AuditService } from '../audit/audit.service';
+import { ApprovalService } from '../approval/approval.service';
+import { TriggerEmittersService } from '../policies/trigger-emitters.service';
+import { DelegationService } from '../token/delegation.service';
 import { NotFoundException } from '@nestjs/common';
 
 describe('GrantsService', () => {
+  let delegationService: { findActiveByChildJti: jest.Mock; resolveRootAgentId: jest.Mock };
   let service: GrantsService;
   let grantRepo: jest.Mocked<Repository<Grant>>;
   let tokenService: jest.Mocked<TokenService>;
@@ -75,6 +79,38 @@ describe('GrantsService', () => {
             logEntry: jest.fn().mockResolvedValue({}),
           },
         },
+        {
+          provide: ApprovalService,
+          useValue: {
+            create: jest.fn().mockResolvedValue({ id: 'approval-1', status: 'pending' }),
+          },
+        },
+        {
+          provide: TriggerEmittersService,
+          useValue: {
+            resourceSensitivity: jest.fn().mockResolvedValue({ fired: false, action: 'allow' }),
+          },
+        },
+        {
+          provide: DelegationService,
+          useValue: {
+            findActiveByChildJti: jest.fn().mockResolvedValue(null),
+            resolveRootAgentId: jest.fn().mockResolvedValue('agent-root'),
+            // Mirror the real narrowing semantics: intersect delegated scope
+            // with the grant — resource type must match, actions intersect.
+            narrowGrant: jest.fn(
+              (scopes: any[], g: { resource_type: string; resource_pattern: string; allowed_actions: string[] }) => {
+                for (const s of scopes) {
+                  if (s.resource_type !== g.resource_type) continue;
+                  const actions = s.allowed_actions.filter((a: string) => g.allowed_actions.includes(a));
+                  if (actions.length === 0) continue;
+                  return { resource_type: g.resource_type, resource_pattern: s.resource_pattern, allowed_actions: actions };
+                }
+                return null;
+              },
+            ),
+          },
+        },
       ],
     }).compile();
 
@@ -83,6 +119,7 @@ describe('GrantsService', () => {
     tokenService = module.get(TokenService);
     identityService = module.get(IdentityService);
     policyEngine = module.get(PolicyEngineService);
+    delegationService = module.get(DelegationService);
   });
 
   it('should be defined', () => {
@@ -139,17 +176,39 @@ describe('GrantsService', () => {
       expect(grantRepo.increment).not.toHaveBeenCalled();
     });
 
-    it('should require approval when a policy demands it', async () => {
+    it('should require approval AND auto-create the pending approval when a policy demands it', async () => {
       policyEngine.evaluate.mockResolvedValueOnce({
         matched: true,
         policy_id: 'policy-hitl',
         action: 'require_approval',
         reason: 'Policy "HITL off-hours" matched',
       });
+      const approvalService = (service as any).approvalService;
       const result = await service.checkPermission('valid-token', 'database', 'users/123', 'read');
       expect(result.allowed).toBe(true);
       expect(result.requires_approval).toBe(true);
       expect(result.matched_policy_id).toBe('policy-hitl');
+      // The loop is closed: a decisionable approval now exists.
+      expect(approvalService.create).toHaveBeenCalledWith(
+        'agent-1',
+        'read',
+        'database:users/123',
+        expect.objectContaining({ policy_id: 'policy-hitl', source: 'policy_engine' }),
+      );
+      expect(result.approval_id).toBe('approval-1');
+    });
+
+    it('still allows when the auto-created approval fails (best-effort)', async () => {
+      policyEngine.evaluate.mockResolvedValueOnce({
+        matched: true,
+        policy_id: 'policy-hitl',
+        action: 'require_approval',
+      });
+      (service as any).approvalService.create.mockRejectedValueOnce(new Error('db down'));
+      const result = await service.checkPermission('valid-token', 'database', 'users/123', 'read');
+      expect(result.allowed).toBe(true);
+      expect(result.requires_approval).toBe(true);
+      expect(result.approval_id).toBeUndefined();
     });
 
     it('should return step_up_required when a policy demands step-up auth', async () => {
@@ -169,6 +228,90 @@ describe('GrantsService', () => {
       const result = await service.checkPermission('valid-token', 'database', 'users/123', 'read');
       expect(result.allowed).toBe(true);
       expect(result.requires_approval).toBe(false);
+    });
+
+    it('derives authority from the ROOT agent grants for a delegated token', async () => {
+      // Child agent has NO grants of its own; the root agent holds grant-1.
+      grantRepo.find.mockResolvedValueOnce([mockGrant as Grant]);
+      delegationService.findActiveByChildJti.mockResolvedValueOnce({
+        id: 'delegation-1', depth: 1, parent_agent_id: 'agent-root', child_jti: 'child-jti',
+      });
+      delegationService.resolveRootAgentId.mockResolvedValueOnce('agent-root');
+      tokenService.verifyToken.mockResolvedValueOnce({
+        valid: true,
+        agent_id: 'agent-child',
+        approval_mode: 'autonomous',
+        jti: 'child-jti',
+        scopes: [{ resource_type: 'database', resource_pattern: 'users/*', allowed_actions: ['read', 'write'] }],
+        delegation: { delegation_id: 'delegation-1', depth: 1, parent_agent_id: 'agent-root' },
+      });
+
+      const result = await service.checkPermission('child-token', 'database', 'users/123', 'read');
+
+      // The query included the root agent's grants.
+      expect(grantRepo.find).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.arrayContaining([
+            expect.objectContaining({ agent_id: 'agent-root' }),
+          ]),
+        }),
+      );
+      expect(result.allowed).toBe(true);
+    });
+
+    it('enforces the NARROWED scopes: a read-only delegation cannot write', async () => {
+      grantRepo.find.mockResolvedValueOnce([mockGrant as Grant]); // root grant: read+write
+      delegationService.findActiveByChildJti.mockResolvedValueOnce({
+        id: 'delegation-1', depth: 1, parent_agent_id: 'agent-root', child_jti: 'child-jti',
+      });
+      delegationService.resolveRootAgentId.mockResolvedValueOnce('agent-root');
+      tokenService.verifyToken.mockResolvedValueOnce({
+        valid: true,
+        agent_id: 'agent-child',
+        approval_mode: 'autonomous',
+        jti: 'child-jti',
+        scopes: [{ resource_type: 'database', resource_pattern: 'users/*', allowed_actions: ['read'] }],
+        delegation: { delegation_id: 'delegation-1', depth: 1, parent_agent_id: 'agent-root' },
+      });
+
+      const result = await service.checkPermission('child-token', 'database', 'users/123', 'write');
+      expect(result.allowed).toBe(false);
+      expect(result.reason).toBe('no_matching_grant');
+    });
+
+    it('denies with delegation_revoked when the chain link is not active', async () => {
+      delegationService.findActiveByChildJti.mockResolvedValueOnce(null);
+      tokenService.verifyToken.mockResolvedValueOnce({
+        valid: true,
+        agent_id: 'agent-child',
+        approval_mode: 'autonomous',
+        jti: 'child-jti',
+        delegation: { delegation_id: 'delegation-1', depth: 1 },
+      });
+
+      const result = await service.checkPermission('child-token', 'database', 'users/123', 'read');
+
+      expect(result.allowed).toBe(false);
+      expect(result.reason).toBe('delegation_revoked');
+    });
+
+    it('denies with delegation_broken on a degenerate chain (root === caller)', async () => {
+      delegationService.findActiveByChildJti.mockResolvedValueOnce({
+        id: 'delegation-1', depth: 1, parent_agent_id: 'agent-child', child_jti: 'child-jti',
+      });
+      delegationService.resolveRootAgentId.mockResolvedValueOnce('agent-child');
+      tokenService.verifyToken.mockResolvedValueOnce({
+        valid: true,
+        agent_id: 'agent-child',
+        approval_mode: 'autonomous',
+        jti: 'child-jti',
+        delegation: { delegation_id: 'delegation-1', depth: 1 },
+      });
+
+      const result = await service.checkPermission('child-token', 'database', 'users/123', 'read');
+
+      expect(result.allowed).toBe(false);
+      expect(result.reason).toBe('delegation_broken');
     });
   });
 

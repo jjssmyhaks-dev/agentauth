@@ -2,6 +2,7 @@ import { Injectable, NotFoundException, BadRequestException, Logger } from '@nes
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Session } from '../../database/entities';
+import { TriggerEmittersService } from '../policies/trigger-emitters.service';
 
 @Injectable()
 export class SessionsService {
@@ -10,6 +11,7 @@ export class SessionsService {
   constructor(
     @InjectRepository(Session)
     private sessionRepo: Repository<Session>,
+    private triggerEmitters: TriggerEmittersService,
   ) {}
 
   async create(
@@ -55,6 +57,18 @@ export class SessionsService {
     }
     if (stored.orchestrator_id && currentContext.orchestrator_id && stored.orchestrator_id !== currentContext.orchestrator_id) {
       mismatches.push('orchestrator_id_mismatch');
+    }
+
+    if (mismatches.length > 0) {
+      // Async policy trigger: session_mismatch policies decide (best-effort).
+      const agent = await this.sessionRepo.manager
+        .getRepository('Agent')
+        .findOne({ where: { id: session.agent_id } });
+      if (agent?.org_id) {
+        this.triggerEmitters
+          .sessionMismatch(agent.org_id, session.agent_id, sessionId, mismatches)
+          .catch(() => {});
+      }
     }
 
     return { valid: mismatches.length === 0, mismatches };

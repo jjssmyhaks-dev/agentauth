@@ -139,6 +139,7 @@ async function request<T>(
   baseUrl: string,
   path: string,
   init: RequestInit & { query?: Query } = {},
+  apiKey?: string | null,
 ): Promise<T> {
   const { query, ...rest } = init;
   const res = await fetch(`${baseUrl}/api${path}${toQuery(query ?? {})}`, {
@@ -146,6 +147,7 @@ async function request<T>(
     headers: {
       "content-type": "application/json",
       "x-org-id": DEFAULT_ORG_ID,
+      ...(apiKey ? { authorization: `Bearer ${apiKey}` } : {}),
       ...(rest.headers ?? {}),
     },
   });
@@ -410,9 +412,9 @@ function mapSimulation(raw: RawSimulation): PolicySimulationResult {
 }
 
 /** REST client for the AgentAuth backend. All methods throw ApiError on failure. */
-export function createApiClient(baseUrl: string) {
+export function createApiClient(baseUrl: string, apiKey?: string | null) {
   const req = <T>(path: string, init?: RequestInit & { query?: Query }) =>
-    request<T>(baseUrl, path, init);
+    request<T>(baseUrl, path, init, apiKey);
 
   return {
     // The identity controller returns a bare array of agent entities.

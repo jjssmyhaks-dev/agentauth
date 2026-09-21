@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { authedGet, authedPost, installBrowserAuth } from "./auth";
 
 /**
  * Golden path against the REAL backend (started by playwright.config.ts
@@ -20,6 +21,7 @@ test.describe("golden path", () => {
     test.setTimeout(120_000);
 
     // ── 1. Landing + sign in ────────────────────────────────────────────
+    await installBrowserAuth(page, API); // bearer key for the dashboard→API calls
     await page.goto("/");
     await expect(page).toHaveTitle(/AgentAuth/i);
     await page.getByRole("link", { name: /get started/i }).first().click();
@@ -50,20 +52,18 @@ test.describe("golden path", () => {
     await page.getByRole("button", { name: /go to dashboard/i }).click();
 
     // ── 3. The agent really exists in the backend ───────────────────────
-    const agentsResp = await request.get(`${API}/api/v1/agents?org_id=${ORG_ID}`);
+    const agentsResp = await authedGet(request, `${API}/api/v1/agents?org_id=${ORG_ID}`);
     expect(agentsResp.ok()).toBeTruthy();
     const agents = (await agentsResp.json()) as Array<{ id: string; name: string }>;
     const agent = agents.find((a) => a.name === agentName);
     expect(agent, "agent registered through the dashboard should exist in the API").toBeTruthy();
 
     // ── 4. Create a pending approval for it (HITL flow) ─────────────────
-    const approvalResp = await request.post(`${API}/api/v1/approvals`, {
-      data: {
-        agent_id: agent!.id,
-        action: "write",
-        resource: "customers_table",
-        context: { source: "e2e" },
-      },
+    const approvalResp = await authedPost(request, `${API}/api/v1/approvals`, {
+      agent_id: agent!.id,
+      action: "write",
+      resource: "customers_table",
+      context: { source: "e2e" },
     });
     expect(approvalResp.ok()).toBeTruthy();
 
@@ -90,7 +90,7 @@ test.describe("golden path", () => {
     // ── 6. The decision landed in the backend audit log ─────────────────
     await expect
       .poll(async () => {
-        const auditResp = await request.get(`${API}/api/v1/audit?org_id=${ORG_ID}&limit=50`);
+        const auditResp = await authedGet(request, `${API}/api/v1/audit?org_id=${ORG_ID}&limit=50`);
         if (!auditResp.ok()) return false;
         // GET /v1/audit returns a paginated envelope: { data: [...], total, ... }
         const body = (await auditResp.json()) as { data?: Array<{ action: string; result: string }> };

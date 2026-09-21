@@ -258,6 +258,34 @@ export class TokenService implements OnModuleInit {
     return { token, expires_at: expiresAt, scopes };
   }
 
+  /**
+   * Issue an on-behalf-of delegated token. The payload is built by
+   * DelegationService (narrowed scopes + chain trace); this method only
+   * signs and records. Delegated tokens are NOT stored in token_issued as
+   * agent-scoped sessions — their lifecycle belongs to the delegation row.
+   */
+  async issueDelegatedToken(
+    payload: Record<string, any>,
+    _orgId: string,
+    ttlMs: number,
+  ): Promise<string> {
+    const ttlMinutes = Math.max(1, Math.ceil(ttlMs / 60_000));
+    return this.jwtService.sign(payload, {
+      privateKey: this.activePrivateKey,
+      algorithm: 'RS256',
+      expiresIn: `${ttlMinutes}m`,
+    });
+  }
+
+  /** Revoke a token by jti (used when a delegation link is revoked). */
+  async revokeByJti(jti: string): Promise<void> {
+    try {
+      await this.tokenRepo.update({ jti }, { revoked: true } as any);
+    } catch (err) {
+      this.logger.warn(`revokeByJti failed for ${jti}: ${err}`);
+    }
+  }
+
   async verifyToken(token: string): Promise<any> {
     try {
       const payload = this.jwtService.verify(token, {
@@ -270,9 +298,32 @@ export class TokenService implements OnModuleInit {
         scopes: payload.scopes,
         jti: payload.jti,
         approval_mode: payload.approval_mode,
+        delegation: payload.delegation,
         expires_at: new Date(payload.exp * 1000),
       };
-    } catch (error) {
+    } catch {
+      // Rotation-aware fallback: a token signed with the previous key is
+      // still valid until it expires (the JWKS keeps both keys for exactly
+      // this window).
+      if (this.previousPublicKey && this.previousKeyId) {
+        try {
+          const payload = this.jwtService.verify(token, {
+            publicKey: this.previousPublicKey,
+            algorithms: ['RS256'],
+          });
+          return {
+            valid: true,
+            agent_id: payload.agent_id,
+            scopes: payload.scopes,
+            jti: payload.jti,
+            approval_mode: payload.approval_mode,
+            delegation: payload.delegation,
+            expires_at: new Date(payload.exp * 1000),
+          };
+        } catch {
+          /* fall through to invalid */
+        }
+      }
       return { valid: false, reason: 'Invalid or expired token' };
     }
   }

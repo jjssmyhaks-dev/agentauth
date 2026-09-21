@@ -6,6 +6,9 @@ import { TokenService } from '../token/token.service';
 import { IdentityService } from '../identity/identity.service';
 import { PolicyEngineService, PolicyContext } from '../policies/policy-engine.service';
 import { AuditService } from '../audit/audit.service';
+import { ApprovalService } from '../approval/approval.service';
+import { TriggerEmittersService } from '../policies/trigger-emitters.service';
+import { DelegationService } from '../token/delegation.service';
 
 @Injectable()
 export class GrantsService {
@@ -18,6 +21,9 @@ export class GrantsService {
     private identityService: IdentityService,
     private policyEngine: PolicyEngineService,
     private auditService: AuditService,
+    private approvalService: ApprovalService,
+    private triggerEmitters: TriggerEmittersService,
+    private delegationService: DelegationService,
   ) {}
 
   async create(
@@ -84,10 +90,61 @@ export class GrantsService {
     const agent = await this.identityService.findOne(agentId);
     if (agent.status === 'revoked') return { allowed: false, reason: 'agent_revoked' };
 
-    // Check if expired tokens are still active
-    const grants = await this.grantRepo.find({
-      where: { agent_id: agentId, status: 'active' },
+    // Delegation chain verification: a delegated token must trace back through
+    // an unbroken chain of ACTIVE delegation links to a real principal. Any
+    // revoked link invalidates the whole subtree — revocation propagates.
+    let delegation = tokenPayload.delegation ?? null;
+    let rootAgentId: string | null = null;
+    let narrowedScopes: Array<{
+      resource_type: string;
+      resource_pattern: string;
+      allowed_actions: string[];
+    }> | null = null;
+    if (delegation?.delegation_id) {
+      const record = await this.delegationService.findActiveByChildJti(tokenPayload.jti);
+      if (!record) {
+        await this.auditCheck(agent, resourceType, resourceId, action, undefined, 'denied', 'delegation_revoked');
+        return { allowed: false, reason: 'delegation_revoked' };
+      }
+      // Authority is DERIVED: resolve the chain to its root agent. Any link
+      // above revoked → the walk stops → treat the chain as broken.
+      rootAgentId = await this.delegationService.resolveRootAgentId(record);
+      if (rootAgentId === agentId) {
+        // Degenerate chain (root === caller) — refuse rather than self-authorize.
+        await this.auditCheck(agent, resourceType, resourceId, action, undefined, 'denied', 'delegation_broken');
+        return { allowed: false, reason: 'delegation_broken' };
+      }
+      delegation = { ...delegation, depth: record.depth, delegation_id: record.id };
+      // Enforce the NARROWED scope set at check time: the root's live grants
+      // are the authority, but the child can only exercise what its chain
+      // actually handed it. Grants outside the delegated scopes are skipped.
+      narrowedScopes = (tokenPayload.scopes ?? []) as Array<{
+        resource_type: string;
+        resource_pattern: string;
+        allowed_actions: string[];
+      }>;
+    }
+    // Grants: the agent's own, plus (for delegated tokens) the ROOT agent's
+    // live grants — delegated authority is derived from the principal that
+    // started the chain.
+    const allGrants = await this.grantRepo.find({
+      where: rootAgentId
+        ? [{ agent_id: agentId, status: 'active' }, { agent_id: rootAgentId, status: 'active' }]
+        : { agent_id: agentId, status: 'active' },
     });
+    const grants = narrowedScopes
+      ? allGrants
+          .map((g) => ({
+            grant: g,
+            narrowed: this.delegationService.narrowGrant(narrowedScopes!, g),
+          }))
+          .filter((x) => x.narrowed)
+          .map((x) => ({
+            ...x.grant,
+            resource_pattern: x.narrowed!.resource_pattern,
+            allowed_actions: x.narrowed!.allowed_actions,
+          }))
+      : allGrants;
 
     for (const grant of grants) {
       if (grant.resource_type !== resourceType) continue;
@@ -124,11 +181,23 @@ export class GrantsService {
         // Caller-supplied sensitivity/trust ride on the token payload when present.
         resource_sensitivity: tokenPayload.resource_sensitivity,
         current_trust_level: tokenPayload.trust_level,
+        // Delegation context: policies can gate on chain depth/root principal,
+        // and every audit row for this check carries the full path.
+        delegation_depth: delegation?.depth,
+        root_principal_id: delegation?.root_principal_id,
       };
       const policyResult = await this.policyEngine.evaluate(policyCtx);
 
+      // Async trigger companion: high-sensitivity access also fires the
+      // dedicated resource_sensitivity_high trigger (best-effort).
+      if (tokenPayload.resource_sensitivity === 'high') {
+        this.triggerEmitters
+          .resourceSensitivity(agent.org_id, agentId, resourceType, resourceId, 'high')
+          .catch(() => {});
+      }
+
       if (policyResult.matched && policyResult.action === 'deny') {
-        await this.auditCheck(agent, resourceType, resourceId, action, grant.id, 'denied', `policy:${policyResult.policy_id}`);
+        await this.auditCheck(agent, resourceType, resourceId, action, grant.id, 'denied', `policy:${policyResult.policy_id}`, delegation);
         return {
           allowed: false,
           matched_grant_id: grant.id,
@@ -151,20 +220,46 @@ export class GrantsService {
 
       await this.grantRepo.increment({ id: grant.id }, 'usage_count', 1);
 
+      const policyRequiresApproval =
+        policyResult.matched && policyResult.action === 'require_approval';
       const requiresApproval =
-        (policyResult.matched && policyResult.action === 'require_approval') ||
+        policyRequiresApproval ||
         agent.approval_mode_override === 'human_in_the_loop' ||
         tokenPayload.approval_mode === 'human_in_the_loop';
+
+      // Close the HITL loop: a require_approval policy doesn't just flag the
+      // response — it creates the pending approval the dashboard can decide.
+      let approvalId: string | undefined;
+      if (policyRequiresApproval) {
+        try {
+          const approval = await this.approvalService.create(
+            agentId,
+            action,
+            `${resourceType}:${resourceId}`,
+            {
+              source: 'policy_engine',
+              policy_id: policyResult.policy_id,
+              policy_reason: policyResult.reason,
+              matched_grant_id: grant.id,
+            },
+          );
+          approvalId = approval.id;
+        } catch (err) {
+          this.logger.warn(`Failed to auto-create approval from policy: ${err}`);
+        }
+      }
 
       await this.auditCheck(
         agent, resourceType, resourceId, action, grant.id, 'allowed',
         policyResult.matched ? `policy:${policyResult.policy_id}` : undefined,
+        delegation,
       );
       return {
         allowed: true,
         matched_grant_id: grant.id,
         matched_policy_id: policyResult.matched ? policyResult.policy_id : undefined,
         requires_approval: requiresApproval,
+        ...(approvalId ? { approval_id: approvalId } : {}),
       };
     }
 
@@ -182,14 +277,19 @@ export class GrantsService {
     grantId: string | undefined,
     result: 'allowed' | 'denied',
     reason?: string,
+    delegation?: { depth?: number; root_principal_id?: string | null; parent_agent_id?: string } | null,
   ): Promise<void> {
     try {
+      const suffix =
+        delegation?.depth != null
+          ? ` [chain: ${delegation.root_principal_id ?? '?'}>${delegation.parent_agent_id ?? '?'}>${agent.id} depth:${delegation.depth}]`
+          : '';
       await this.auditService.logEntry(
         agent.org_id,
         'agent',
         agent.id,
         'permission.check',
-        `${resourceType}:${resourceId}${action ? `#${action}` : ''}`,
+        `${resourceType}:${resourceId}${action ? `#${action}` : ''}${suffix}`,
         result,
       );
     } catch (err) {

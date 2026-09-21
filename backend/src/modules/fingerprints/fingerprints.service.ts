@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as crypto from 'crypto';
 import { EnvironmentFingerprint } from '../../database/entities';
+import { TriggerEmittersService } from '../policies/trigger-emitters.service';
 
 @Injectable()
 export class FingerprintsService {
@@ -11,6 +12,7 @@ export class FingerprintsService {
   constructor(
     @InjectRepository(EnvironmentFingerprint)
     private fpRepo: Repository<EnvironmentFingerprint>,
+    private triggerEmitters: TriggerEmittersService,
   ) {}
 
   async register(agentId: string, environmentInfo: Record<string, any>): Promise<EnvironmentFingerprint> {
@@ -37,7 +39,18 @@ export class FingerprintsService {
       use_count: 1,
     });
     this.logger.log(`New fingerprint registered for agent ${agentId}`);
-    return this.fpRepo.save(fp);
+    const saved = await this.fpRepo.save(fp);
+
+    // Async policy trigger: let new_environment policies decide (best-effort).
+    const agent = await this.fpRepo.manager
+      .getRepository('Agent')
+      .findOne({ where: { id: agentId } });
+    if (agent?.org_id) {
+      this.triggerEmitters
+        .newEnvironment(agent.org_id, agentId, saved.id, environmentInfo)
+        .catch(() => {});
+    }
+    return saved;
   }
 
   async findAll(agentId: string): Promise<EnvironmentFingerprint[]> {

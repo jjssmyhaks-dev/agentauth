@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import type { Page } from "@playwright/test";
+import { authedGet, authedPost, installBrowserAuth, requireApiKey } from "./auth";
 
 /**
  * Policy engine — the authorization layer that gates every permission check.
@@ -18,6 +19,7 @@ const ORG_ID = "00000000-0000-4000-8000-000000000001";
 
 /** Sign in (idempotent) and land on the dashboard. */
 async function signIn(page: Page) {
+  await installBrowserAuth(page, API); // bearer key for the dashboard→API calls
   await page.goto("/");
   await page.getByRole("link", { name: /get started/i }).first().click();
   await expect(page).toHaveURL(/\/auth/);
@@ -53,7 +55,7 @@ test.describe("policy engine", () => {
     }
 
     // Pick any registered agent with a read grant (the wizard creates one).
-    const agentsResp = await request.get(`${API}/api/v1/agents?org_id=${ORG_ID}`);
+    const agentsResp = await authedGet(request, `${API}/api/v1/agents?org_id=${ORG_ID}`);
     expect(agentsResp.ok()).toBeTruthy();
     const agents = (await agentsResp.json()) as Array<{ id: string; name: string }>;
     expect(agents.length, "an onboarded agent must exist").toBeGreaterThan(0);
@@ -62,11 +64,13 @@ test.describe("policy engine", () => {
     // ── 1. Create a deny policy through the dashboard UI ────────────────
     // Clean slate first: the E2E backend may carry policies from previous
     // runs, and the spec asserts its own policy is the one that fires.
-    const cleanupResp = await request.get(`${API}/api/v1/policies?org_id=${ORG_ID}`);
+    const cleanupResp = await authedGet(request, `${API}/api/v1/policies?org_id=${ORG_ID}`);
     if (cleanupResp.ok()) {
       const existing = (await cleanupResp.json()) as Array<{ id: string }>;
       for (const p of existing) {
-        await request.delete(`${API}/api/v1/policies/${p.id}`);
+        await request.delete(`${API}/api/v1/policies/${p.id}`, {
+          headers: { authorization: `Bearer ${requireApiKey()}` },
+        });
       }
     }
 
@@ -103,19 +107,17 @@ test.describe("policy engine", () => {
     // spec cannot hold the agent's private key (it never leaves the browser),
     // so the simulate endpoint — the same engine checkPermission calls — is
     // the authoritative proof here.
-    const simResp = await request.post(`${API}/api/v1/policies/simulate`, {
-      data: {
-        org_id: ORG_ID,
-        agent_id: agent.id,
-        trigger: "permission_check",
-        resource_type: "database",
-        resource_id: "customers_table",
-        action: "read",
-        current_trust_level: "normal",
-        off_hours: false,
-        session_mismatch: false,
-        new_environment: false,
-      },
+    const simResp = await authedPost(request, `${API}/api/v1/policies/simulate`, {
+      org_id: ORG_ID,
+      agent_id: agent.id,
+      trigger: "permission_check",
+      resource_type: "database",
+      resource_id: "customers_table",
+      action: "read",
+      current_trust_level: "normal",
+      off_hours: false,
+      session_mismatch: false,
+      new_environment: false,
     });
     expect(simResp.ok()).toBeTruthy();
     const sim = (await simResp.json()) as {
@@ -127,7 +129,7 @@ test.describe("policy engine", () => {
     expect(sim.result.action).toBe("deny");
 
     // The created policy is the one that fired.
-    const policiesResp = await request.get(`${API}/api/v1/policies?org_id=${ORG_ID}`);
+    const policiesResp = await authedGet(request, `${API}/api/v1/policies?org_id=${ORG_ID}`);
     const policies = (await policiesResp.json()) as Array<{ id: string; description: string }>;
     const created = policies.find((p) => p.description === policyDescription);
     expect(created, "created policy exists in backend").toBeTruthy();
@@ -140,22 +142,20 @@ test.describe("policy engine", () => {
     // Disabling mirrors to the API and refetches — wait for the backend.
     await expect
       .poll(async () => {
-        const r = await request.get(`${API}/api/v1/policies?org_id=${ORG_ID}`);
+        const r = await authedGet(request, `${API}/api/v1/policies?org_id=${ORG_ID}`);
         const rows = (await r.json()) as Array<{ id: string; enabled: boolean }>;
         return rows.find((p) => p.id === created!.id)?.enabled;
       })
       .toBe(false);
 
-    const simAfter = await request.post(`${API}/api/v1/policies/simulate`, {
-      data: {
-        org_id: ORG_ID,
-        agent_id: agent.id,
-        trigger: "permission_check",
-        resource_type: "database",
-        resource_id: "customers_table",
-        action: "read",
-        current_trust_level: "normal",
-      },
+    const simAfter = await authedPost(request, `${API}/api/v1/policies/simulate`, {
+      org_id: ORG_ID,
+      agent_id: agent.id,
+      trigger: "permission_check",
+      resource_type: "database",
+      resource_id: "customers_table",
+      action: "read",
+      current_trust_level: "normal",
     });
     expect(simAfter.ok()).toBeTruthy();
     const simAfterBody = (await simAfter.json()) as {
@@ -169,7 +169,7 @@ test.describe("policy engine", () => {
     await expect(policyRow).toHaveCount(0, { timeout: 15_000 });
     await expect
       .poll(async () => {
-        const r = await request.get(`${API}/api/v1/policies?org_id=${ORG_ID}`);
+        const r = await authedGet(request, `${API}/api/v1/policies?org_id=${ORG_ID}`);
         const rows = (await r.json()) as Array<{ id: string }>;
         return rows.some((p) => p.id === created!.id);
       })

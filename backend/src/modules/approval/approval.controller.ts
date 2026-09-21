@@ -1,7 +1,8 @@
-import { Controller, Get, Post, Patch, Body, Param, Query } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Body, Param, Query, Req } from '@nestjs/common';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { ApprovalService } from './approval.service';
 import { CreateApprovalDto, DecideApprovalDto } from '../../common/dto';
+import { orgFrom } from '../policies/policies-org.helper';
 
 @ApiTags('Approvals')
 @Controller('v1')
@@ -16,9 +17,9 @@ export class ApprovalController {
   }
 
   @Get('approvals')
-  @ApiOperation({ summary: 'List approvals for an org' })
-  async findAll(@Query('org_id') orgId: string, @Query('status') status?: string) {
-    return this.approvalService.findAll(orgId, status);
+  @ApiOperation({ summary: 'List approvals for the resolved org' })
+  async findAll(@Req() request: any, @Query('org_id') orgId: string, @Query('status') status?: string) {
+    return this.approvalService.findAll(orgFrom(request, orgId), status);
   }
 
   @Get('approvals/:id')
@@ -35,12 +36,13 @@ export class ApprovalController {
   }
 
   @Patch('orgs/:org_id/approval-policy')
-  @ApiOperation({ summary: 'Update org approval policy' })
+  @ApiOperation({ summary: 'Update org approval policy (org from the bearer key when present)' })
   async updatePolicy(
+    @Req() request: any,
     @Param('org_id') orgId: string,
     @Body() body: { default_mode: 'autonomous' | 'human_in_the_loop'; action_overrides?: Record<string, string> },
   ) {
-    const org = await this.approvalService.updateOrgPolicy(orgId, body.default_mode, body.action_overrides);
+    const org = await this.approvalService.updateOrgPolicy(orgFrom(request, orgId), body.default_mode, body.action_overrides);
     return { org_id: org.id, default_approval_mode: org.default_approval_mode };
   }
 }

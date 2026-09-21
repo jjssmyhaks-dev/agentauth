@@ -1,9 +1,10 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Query, BadRequestException } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, Query, Req, BadRequestException } from '@nestjs/common';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { PoliciesService } from './policies.service';
 import { PolicyEngineService } from './policy-engine.service';
 import { PolicyVersionsService } from './policy-versions.service';
 import { AuditService } from '../audit/audit.service';
+import { orgFrom } from './policies-org.helper';
 import { IsString, IsOptional, IsInt, IsBoolean, IsUUID, IsObject } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
@@ -93,8 +94,9 @@ export class PoliciesController {
   }
 
   @Post()
-  @ApiOperation({ summary: 'Create a policy rule' })
-  async create(@Body() dto: CreatePolicyDto) {
+  @ApiOperation({ summary: 'Create a policy rule (org from the bearer key; client org_id ignored)' })
+  async create(@Req() request: any, @Body() dto: CreatePolicyDto) {
+    const orgId = orgFrom(request, dto.org_id);
     if (!POLICY_TRIGGERS.includes(dto.trigger as (typeof POLICY_TRIGGERS)[number])) {
       throw new BadRequestException(
         `Invalid trigger "${dto.trigger}". Valid: ${POLICY_TRIGGERS.join(', ')}`,
@@ -116,19 +118,19 @@ export class PoliciesController {
       }
     }
     const policy = await this.policiesService.create(
-      dto.org_id, dto.scope, dto.scope_target_id || null,
+      orgId, dto.scope, dto.scope_target_id || null,
       dto.trigger, dto.condition, dto.action,
       dto.priority || 0, dto.description,
     );
     await this.versions.record(policy, 'created', null, dto.changed_by ?? null);
-    await this.auditChange(dto.org_id, 'policy.created', policy.id, dto.changed_by ?? null);
+    await this.auditChange(orgId, 'policy.created', policy.id, dto.changed_by ?? null);
     return { policy_id: policy.id, status: 'created' };
   }
 
   @Get()
-  @ApiOperation({ summary: 'List all policies for an org' })
-  async findAll(@Query('org_id') orgId: string) {
-    return this.policiesService.findAll(orgId);
+  @ApiOperation({ summary: 'List all policies for the org resolved from the bearer key' })
+  async findAll(@Req() request: any, @Query('org_id') orgId: string) {
+    return this.policiesService.findAll(orgFrom(request, orgId));
   }
 
   @Get(':id')
@@ -152,7 +154,7 @@ export class PoliciesController {
 
   @Put(':id')
   @ApiOperation({ summary: 'Update a policy' })
-  async update(@Param('id') id: string, @Body() dto: UpdatePolicyDto) {
+  async update(@Param('id') id: string, @Req() request: any, @Body() dto: UpdatePolicyDto) {
     const { changed_by: changedBy, ...updates } = dto;
     const before = await this.policiesService.findOne(id);
     const policy = await this.policiesService.update(id, updates);
@@ -164,6 +166,7 @@ export class PoliciesController {
       trackedKeys.length === 1 && (trackedKeys[0] === 'enabled' || trackedKeys[1] === 'enabled');
     const changeType: 'enabled' | 'disabled' | 'updated' =
       onlyEnabledFlip ? (updates.enabled ? 'enabled' : 'disabled') : 'updated';
+    void request; // org ownership enforced by service lookups + role guard
     await this.versions.record(policy, changeType, before, changedBy ?? null);
     await this.auditChange(policy.org_id, `policy.${changeType}`, policy.id, changedBy ?? null);
     return policy;

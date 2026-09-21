@@ -27,25 +27,41 @@ export default function OnboardingWizard({ onComplete }: { onComplete: () => voi
   const [grantActions, setGrantActions] = useState<string[]>(["read", "write"]);
   const [approvalMode, setApprovalMode] = useState<"autonomous" | "human-in-the-loop">("human-in-the-loop");
   const [copied, setCopied] = useState(false);
+  // In-flight guard: agent/grant creation awaits the API in API mode. Without
+  // it, a second click re-enters the handler before setStep advances —
+  // duplicate agents in the backend, and a wizard stuck on the same step.
+  const [busy, setBusy] = useState(false);
 
   const handleCreateAgent = async () => {
-    const id = "ag_" + Date.now().toString(36);
-    // Real PEM key in API mode (the backend verifies challenge signatures
-    // against it); placeholder in mock mode.
-    const dataSource = (window as any).__AGENTAUTH_DATA_SOURCE__ ?? "mock";
-    const publicKey =
-      dataSource === "api" ? await generateAgentPublicKeyPem() : mockPublicKey();
-    // addAgent resolves to the canonical id: the backend-assigned UUID in
-    // API mode, the local id in mock mode. The grant step must use it.
-    const resolvedId = await addAgent({ id, name: agentName || "My First Agent", status: "active", approvalMode, publicKey, fingerprint: "SHA256:" + Math.random().toString(36).slice(2, 10), trustLevel: "normal", trustScore: 75, createdAt: new Date().toISOString(), lastActiveAt: new Date().toISOString(), tokensIssued: 0, actionsTotal: 0, actionsAllowed: 0, actionsDenied: 0, tier: "free", tags: ["onboarding"] });
-    setAgentId(resolvedId);
-    setStep(1);
+    if (busy) return;
+    setBusy(true);
+    try {
+      const id = "ag_" + Date.now().toString(36);
+      // Real PEM key in API mode (the backend verifies challenge signatures
+      // against it); placeholder in mock mode.
+      const dataSource = (window as any).__AGENTAUTH_DATA_SOURCE__ ?? "mock";
+      const publicKey =
+        dataSource === "api" ? await generateAgentPublicKeyPem() : mockPublicKey();
+      // addAgent resolves to the canonical id: the backend-assigned UUID in
+      // API mode, the local id in mock mode. The grant step must use it.
+      const resolvedId = await addAgent({ id, name: agentName || "My First Agent", status: "active", approvalMode, publicKey, fingerprint: "SHA256:" + Math.random().toString(36).slice(2, 10), trustLevel: "normal", trustScore: 75, createdAt: new Date().toISOString(), lastActiveAt: new Date().toISOString(), tokensIssued: 0, actionsTotal: 0, actionsAllowed: 0, actionsDenied: 0, tier: "free", tags: ["onboarding"] });
+      setAgentId(resolvedId);
+      setStep(1);
+    } finally {
+      setBusy(false);
+    }
   };
 
-  const handleCreateGrant = () => {
-    const agent = agents.find((a) => a.id === agentId);
-    if (agent) addGrant({ id: "gr_" + Date.now().toString(36), agentId, agentName: agent.name, resourceType, resourcePattern, actions: grantActions as any, status: "active", grantedAt: new Date().toISOString(), expiresAt: null, usageCount: 0, usageCap: null, grantedBy: "admin@acme.com" });
-    setStep(2);
+  const handleCreateGrant = async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const agent = agents.find((a) => a.id === agentId);
+      if (agent) addGrant({ id: "gr_" + Date.now().toString(36), agentId, agentName: agent.name, resourceType, resourcePattern, actions: grantActions as any, status: "active", grantedAt: new Date().toISOString(), expiresAt: null, usageCount: 0, usageCap: null, grantedBy: "admin@acme.com" });
+      setStep(2);
+    } finally {
+      setBusy(false);
+    }
   };
 
   const handleSetApprovalMode = () => {
@@ -96,7 +112,7 @@ export default function OnboardingWizard({ onComplete }: { onComplete: () => voi
         </AnimatePresence>
         <div className="mt-6 flex justify-between">
           {step > 0 ? <Button variant="ghost" onClick={() => setStep(step - 1)} className="text-muted-foreground"><ArrowLeft className="mr-2 h-4 w-4" /> Back</Button> : <div />}
-          {step < 3 ? <Button onClick={() => { if (step === 0) handleCreateAgent(); else if (step === 1) handleCreateGrant(); else handleSetApprovalMode(); }} disabled={(step === 0 && !agentName) || (step === 1 && !resourcePattern)} className="rounded-full bg-primary text-primary-foreground hover:opacity-90">Continue <ArrowRight className="ml-2 h-4 w-4" /></Button> : <Button onClick={onComplete} className="rounded-full bg-primary text-primary-foreground hover:opacity-90">Go to Dashboard <ArrowRight className="ml-2 h-4 w-4" /></Button>}
+          {step < 3 ? <Button onClick={() => { if (step === 0) handleCreateAgent(); else if (step === 1) handleCreateGrant(); else handleSetApprovalMode(); }} disabled={(step === 0 && !agentName) || (step === 1 && !resourcePattern) || busy} className="rounded-full bg-primary text-primary-foreground hover:opacity-90">Continue <ArrowRight className="ml-2 h-4 w-4" /></Button> : <Button onClick={onComplete} className="rounded-full bg-primary text-primary-foreground hover:opacity-90">Go to Dashboard <ArrowRight className="ml-2 h-4 w-4" /></Button>}
         </div>
       </div>
     </div>

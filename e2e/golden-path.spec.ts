@@ -30,13 +30,23 @@ test.describe("golden path", () => {
     await expect(page).toHaveURL(/dashboard/, { timeout: 20_000 });
 
     // ── 2. Onboarding wizard (auto-opens on first dashboard visit) ──────
+    // Each Continue advances asynchronously in API mode (keygen + POST +
+    // refetch), so wait for each step's unique heading before acting.
     const agentName = `e2e-agent-${Date.now().toString(36)}`;
+    await expect(page.getByRole("heading", { name: /create your first agent/i })).toBeVisible();
     await page.getByPlaceholder("e.g., Code Review Bot").fill(agentName);
     await page.getByRole("button", { name: /continue/i }).click();
+
     // Step 2: grant (defaults: database / customers_table / read+write)
+    await expect(page.getByRole("heading", { name: /set a grant/i })).toBeVisible({ timeout: 30_000 });
     await page.getByRole("button", { name: /continue/i }).click();
+
     // Step 3: approval mode (defaults to human-in-the-loop)
+    await expect(page.getByRole("heading", { name: /approval mode/i })).toBeVisible({ timeout: 30_000 });
     await page.getByRole("button", { name: /continue/i }).click();
+
+    // Step 4: done
+    await expect(page.getByRole("heading", { name: /you're set/i })).toBeVisible({ timeout: 30_000 });
     await page.getByRole("button", { name: /go to dashboard/i }).click();
 
     // ── 3. The agent really exists in the backend ───────────────────────

@@ -45,3 +45,4 @@ coverage/
 # Python artifacts
 __pycache__/
 *.pyc
+.env.e2e

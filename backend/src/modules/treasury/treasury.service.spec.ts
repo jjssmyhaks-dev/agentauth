@@ -6,6 +6,7 @@ import { TreasuryService } from './treasury.service';
 import { TreasuryBudgetsService } from './budgets.service';
 import { TreasuryLedgerService } from './ledger.service';
 import { ApprovalService } from '../approval/approval.service';
+import { RailsService } from './rails/rails.service';
 import {
   TreasuryPolicy, TreasuryPolicyVersion, TreasuryMandate, TreasuryCounterparty,
   TreasuryPaymentIntent, TreasuryAuthorization, TreasuryKillSwitch,
@@ -52,6 +53,7 @@ describe('TreasuryService decision path', () => {
   let approvalRepo: ReturnType<typeof makeRepo>;
   let authorizationRepo: ReturnType<typeof makeRepo>;
   let approvalService: { create: jest.Mock };
+  let rails: { connectionFor: jest.Mock; prepare: jest.Mock; issueCredential: jest.Mock; confirm: jest.Mock };
 
   const policyDoc = {
     schema: 'agent-policy/1',
@@ -109,6 +111,17 @@ describe('TreasuryService decision path', () => {
       remaining: jest.fn(async () => ({ remaining_minor: '148500000', period_end: new Date() })),
     };
     approvalService = { create: jest.fn(async () => ({ id: 'inbox-1', status: 'pending' })) };
+    rails = {
+      connectionFor: jest.fn(async () => ({ provider: 'manual', config: {} })),
+      prepare: jest.fn(async (_rail: any, intent: any) => ({
+        rail: 'manual', counterparty: intent.counterparty, amount_minor: intent.amount_minor,
+        asset_code: intent.asset_code, details: {},
+      })),
+      issueCredential: jest.fn(async () => ({
+        kind: 'instruction', payload: { execute: 'off-platform' }, provider_ref: 'manual:x', expires_at: new Date(Date.now() + 60_000),
+      })),
+      confirm: jest.fn(async () => ({ ok: true, settled: true, provider_ref: 'manual:x' })),
+    };
 
     // Default happy-path wiring.
     killSwitchRepo.find.mockResolvedValue([]);
@@ -124,6 +137,7 @@ describe('TreasuryService decision path', () => {
         { provide: TreasuryBudgetsService, useValue: budgets },
         { provide: TreasuryLedgerService, useValue: ledger },
         { provide: ApprovalService, useValue: approvalService },
+        { provide: RailsService, useValue: rails },
         { provide: getRepositoryToken(TreasuryPolicy), useValue: makeRepo() },
         { provide: getRepositoryToken(TreasuryPolicyVersion), useValue: policyVersionRepo },
         { provide: getRepositoryToken(TreasuryMandate), useValue: mandateRepo },
@@ -150,6 +164,7 @@ describe('TreasuryService decision path', () => {
         { provide: TreasuryBudgetsService, useValue: budgets },
         { provide: TreasuryLedgerService, useValue: ledger },
         { provide: ApprovalService, useValue: approvalService },
+        { provide: RailsService, useValue: rails },
         { provide: getRepositoryToken(TreasuryPolicy), useValue: makeRepo() },
         { provide: getRepositoryToken(TreasuryPolicyVersion), useValue: policyVersionRepo },
         { provide: getRepositoryToken(TreasuryMandate), useValue: mandateRepo },
@@ -186,6 +201,9 @@ describe('TreasuryService decision path', () => {
     const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString());
     expect(payload.mandate_id).toBe('mandate-1');
     expect(payload.act.sub).toBe(PRINCIPAL); // delegation chain surfaced
+    // Rail credential brokered through the adapter (FR-PAY-2)
+    expect(result.credential).toMatchObject({ kind: 'instruction', provider_ref: 'manual:x' });
+    expect(rails.prepare).toHaveBeenCalledWith('x402', expect.anything(), expect.anything());
 
     // jti recorded for single-use enforcement
     expect(authorizationRepo.save).toHaveBeenCalledWith(

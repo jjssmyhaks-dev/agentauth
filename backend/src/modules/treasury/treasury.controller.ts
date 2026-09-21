@@ -10,6 +10,10 @@ import { TreasuryService, AuthorizeInput } from './treasury.service';
 import { TreasuryBudgetsService } from './budgets.service';
 import { TreasuryLedgerService } from './ledger.service';
 import { AUTH_REQUEST_KEY, PublicApi } from '../auth/api-key.guard';
+import { RailsService } from './rails/rails.service';
+import { Repository } from 'typeorm';
+import { InjectRepository } from '@nestjs/typeorm';
+import { TreasuryRailConnection } from '../../database/entities';
 
 class AmountDto {
   @IsString() @IsNotEmpty() value: string;
@@ -95,6 +99,14 @@ class KillSwitchDto {
   @IsOptional() @IsString() reason?: string;
 }
 
+class RailConnectionDto {
+  @IsIn(['manual', 'x402', 'card', 'upi_uap']) rail: string;
+  @IsString() @IsNotEmpty() provider: string;
+  @IsIn(['sandbox', 'live']) environment: string;
+  @IsString() @IsNotEmpty() display_name: string;
+  @IsOptional() @IsObject() config?: Record<string, any>;
+}
+
 class CounterpartyDto {
   @IsIn(['merchant', 'api_service', 'agent', 'wallet', 'bank_account']) kind: string;
   @IsString() @IsNotEmpty() identifier: string;
@@ -119,6 +131,9 @@ export class TreasuryController {
     private readonly treasury: TreasuryService,
     private readonly budgets: TreasuryBudgetsService,
     private readonly ledger: TreasuryLedgerService,
+    private readonly rails: RailsService,
+    @InjectRepository(TreasuryRailConnection)
+    private readonly railConnectionRepo: Repository<TreasuryRailConnection>,
   ) {}
 
   // ── Payments (agent-facing) ──────────────────────────────────────────────
@@ -351,6 +366,45 @@ export class TreasuryController {
   @ApiOperation({ summary: 'List counterparties' })
   async listCounterparties(@Req() request: any, @Query('org_id') orgId?: string) {
     return this.treasury.listCounterparties(orgFrom(request, orgId));
+  }
+
+  // ── Rails (FR-PAY-2) ─────────────────────────────────────────────────
+
+  @Get('rails')
+  @ApiOperation({ summary: 'List registered rails and their capabilities' })
+  listRails() {
+    return this.rails.registeredRails().map((rail) => ({
+      rail,
+      ...this.rails.get(rail).capabilities(),
+    }));
+  }
+
+  @Post('rails/connections')
+  @ApiOperation({ summary: "Connect the org's own wallet-provider / issuer account (non-custodial)" })
+  async createRailConnection(@Req() request: any, @Body() dto: RailConnectionDto, @Query('org_id') orgId?: string) {
+    const saved = (await this.railConnectionRepo.save(
+      this.railConnectionRepo.create({
+        org_id: orgFrom(request, orgId),
+        rail: dto.rail as any,
+        provider: dto.provider,
+        environment: dto.environment as any,
+        display_name: dto.display_name,
+        // Secrets must arrive via the KMS-encrypted path; config is non-secret only.
+        config: dto.config ?? {},
+        status: 'active',
+      } as any),
+    )) as unknown as TreasuryRailConnection;
+    return { id: saved.id, rail: saved.rail, provider: saved.provider, environment: saved.environment, status: saved.status };
+  }
+
+  @Get('rails/connections')
+  @ApiOperation({ summary: 'List rail connections (never includes credentials)' })
+  async listRailConnections(@Req() request: any, @Query('org_id') orgId?: string) {
+    const rows = await this.railConnectionRepo.find({ where: { org_id: orgFrom(request, orgId) }, order: { created_at: 'DESC' } });
+    return rows.map((c) => ({
+      id: c.id, rail: c.rail, provider: c.provider, environment: c.environment,
+      display_name: c.display_name, status: c.status, created_at: c.created_at,
+    }));
   }
 
   // ── Maintenance ──────────────────────────────────────────────────────────

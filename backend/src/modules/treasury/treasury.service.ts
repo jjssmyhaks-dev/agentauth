@@ -22,6 +22,7 @@ import { validatePolicyDocument, canonicalJson } from './policy-schema';
 import { evaluatePolicy, PolicyContext, PolicyDecision } from './policy-evaluator';
 import { TreasuryBudgetsService } from './budgets.service';
 import { TreasuryLedgerService } from './ledger.service';
+import { RailsService } from './rails/rails.service';
 import { ApprovalService } from '../approval/approval.service';
 import { Agent } from '../../database/entities';
 
@@ -48,6 +49,8 @@ export interface AuthorizeResult {
   status: string;
   reasons: Array<{ rule_id?: string; code?: string; message: string }>;
   authorization?: { token: string; expires_at: Date; audience: string };
+  /** Rail credential (payment header, card reference, instruction) when brokering succeeded. */
+  credential?: { kind: string; payload: Record<string, any>; provider_ref: string; expires_at: Date };
   approval?: { id: string; expires_at: Date };
   budget?: { remaining: string; asset: string; period_ends_at: Date };
 }
@@ -77,6 +80,7 @@ export class TreasuryService {
     @InjectRepository(Agent) private agentRepo: Repository<Agent>,
     private budgets: TreasuryBudgetsService,
     private ledger: TreasuryLedgerService,
+    private rails: RailsService,
     private approvalService: ApprovalService,
   ) {
     if (process.env.TREASURY_SPEND_PRIVATE_KEY && process.env.TREASURY_SPEND_PUBLIC_KEY) {
@@ -723,12 +727,40 @@ export class TreasuryService {
       correlation_id: correlationId,
     });
 
+    // Rail credential brokering (FR-PAY-2): prepare + issue through the
+    // adapter. Credential failures NEVER flip the decision — the spend token
+    // is already valid; the agent can retry credential acquisition.
+    let credential: Record<string, any> | undefined;
+    try {
+      const connection = await this.rails.connectionFor(intent.org_id, intent.rail, input.environment ?? 'sandbox');
+      const prepared = await this.rails.prepare(
+        intent.rail,
+        { amount_minor: maxAmount, asset_code: intent.asset_code, counterparty: input.counterparty, rail_details: input.rail_details },
+        { org_id: intent.org_id, environment: input.environment ?? 'sandbox', connection },
+      );
+      const issued = await this.rails.issueCredential(
+        intent.rail,
+        prepared,
+        {
+          token, jti, intent_id: intent.id, agent_id: intent.agent_id, mandate_id: mandate.id,
+          max_amount_minor: maxAmount, asset_code: intent.asset_code,
+          counterparty: input.counterparty.identifier, audience, expires_at: expiresAt,
+        },
+        { org_id: intent.org_id, environment: input.environment ?? 'sandbox', connection },
+      );
+      credential = { kind: issued.kind, payload: issued.payload, provider_ref: issued.provider_ref, expires_at: issued.expires_at };
+    } catch (err: any) {
+      this.logger.warn(`credential issuance failed for intent ${intent.id} (decision stands): ${err?.message ?? err}`);
+      credential = undefined;
+    }
+
     return {
       intent_id: intent.id,
       decision: decision.effect,
       status: 'authorized',
       reasons: decision.reasons,
       authorization: { token, expires_at: expiresAt, audience },
+      ...(credential ? { credential: credential as AuthorizeResult['credential'] } : {}),
       ...(budgetInfo ? { budget: budgetInfo } : {}),
     };
   }
@@ -749,6 +781,23 @@ export class TreasuryService {
     if (intent.status !== 'authorized' && intent.status !== 'executing') {
       throw new BadRequestException(`Intent in status ${intent.status} cannot be confirmed`);
     }
+    // Route confirmation evidence through the rail adapter (FR-PAY-2).
+    try {
+      const connection = await this.rails.connectionFor(orgId, intent.rail, intent.environment ?? 'sandbox');
+      const result = await this.rails.confirm(
+        intent.rail,
+        intentId,
+        { rail_ref: evidence.rail_ref, note: evidence.note },
+        { org_id: orgId, environment: intent.environment ?? 'sandbox', connection },
+      );
+      if (!result.ok) {
+        throw new BadRequestException(`rail rejected the confirmation: ${result.reason ?? 'unknown'}`);
+      }
+    } catch (err: any) {
+      if (err instanceof BadRequestException) throw err;
+      this.logger.warn(`rail confirm fallback for ${intentId}: ${err?.message ?? err}`);
+    }
+
     await this.budgets.capture(intentId, orgId);
     await this.intentRepo.update(intentId, { status: 'settled' });
     await this.authorizationRepo.update({ payment_intent_id: intentId }, { consumed_at: new Date() });

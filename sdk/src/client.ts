@@ -6,6 +6,7 @@ import {
   UsageCapReachedError,
   PendingApprovalTimeoutError,
 } from './errors';
+import { TreasuryClient } from './treasury';
 
 interface TokenResponse {
   token: string;
@@ -32,10 +33,30 @@ export class AgentAuthClient {
   private currentToken: string | null = null;
   private tokenExpiresAt: Date | null = null;
 
+  /** Agent Treasury namespace (payments governance; PRD §12). */
+  public treasury: TreasuryClient;
+
   constructor(agentId: string, privateKey: string, apiUrl: string = 'http://localhost:4000') {
     this.agentId = agentId;
     this.privateKey = privateKey;
     this.apiUrl = apiUrl;
+    this.treasury = new TreasuryClient({
+      agentId,
+      privateKey,
+      request: async <T>(method: 'GET' | 'POST', path: string, body?: unknown, extraHeaders?: Record<string, string>): Promise<T> => {
+        // Treasury endpoints are control-plane scoped: they authenticate with
+        // an agent token when available, else fall back to the bare call so
+        // org-keyed operators can also drive the API.
+        const headers: Record<string, string> = { ...extraHeaders };
+        try {
+          const token = await this.getToken();
+          headers['authorization'] = `Bearer ${token}`;
+        } catch {
+          /* no keypair auth configured — caller may use an API key upstream */
+        }
+        return this.fetch<T>(path, { method, body: body !== undefined ? JSON.stringify(body) : undefined, headers });
+      },
+    });
   }
 
   private async fetch<T>(endpoint: string, options?: RequestInit): Promise<T> {

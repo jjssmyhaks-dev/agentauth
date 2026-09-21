@@ -2,7 +2,7 @@ import { Outlet, Link, useLocation } from "react-router-dom";
 import {
   LayoutDashboard, Shield, KeyRound, CheckSquare, Activity, BarChart3,
   Webhook, Key, Settings, BookOpen, LogOut, ChevronLeft, Menu,
-  Bell, Search, BellRing, HeartPulse, MonitorSmartphone, ShieldAlert, ScrollText, Users,
+  Bell, Search, BellRing, HeartPulse, MonitorSmartphone, ShieldAlert, ScrollText, Users, Wallet,
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -27,6 +27,7 @@ const navItems = [
   { icon: Users, label: "Groups", path: "/dashboard/groups" },
   { icon: KeyRound, label: "Grants", path: "/dashboard/grants" },
   { icon: ScrollText, label: "Policies", path: "/dashboard/policies" },
+  { icon: Wallet, label: "Treasury", path: "/dashboard/treasury" },
   { icon: CheckSquare, label: "Approvals", path: "/dashboard/approvals" },
   { icon: Activity, label: "Audit Log", path: "/dashboard/activity" },
   { icon: BarChart3, label: "Analytics", path: "/dashboard/analytics" },

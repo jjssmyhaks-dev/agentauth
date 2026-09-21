@@ -21,3 +21,11 @@ export { SyncJob } from './sync-job.entity';
 export { DocEmbedding } from './doc-embedding.entity';
 export { AgentUsage } from './agent-usage.entity';
 export { DelegatedToken } from './delegated-token.entity';
+export {
+  TreasuryPolicy, TreasuryPolicyVersion, TreasuryMandate, TreasuryCounterparty,
+  TreasuryPaymentIntent, TreasuryBudget, TreasuryBudgetPeriod,
+  TreasuryBudgetReservation, TreasuryApproval, TreasuryApprovalDecision,
+  TreasuryAuthorization, TreasuryKillSwitch, TreasuryLedgerEntry,
+  RailType, TreasuryEnvironment, IntentStatus, DecisionEffect, ReservationStatus,
+  BudgetScope, BudgetPeriodKind, TREASURY_ASSETS, toMinorUnits, fromMinorUnits,
+} from '../../modules/treasury/treasury-entities';

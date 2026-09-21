@@ -24,6 +24,10 @@ import {
   EnvironmentFingerprint, AgentKey, AgentAttribute,
   AgentGroup, SyncSource, SyncJob, DocEmbedding, DelegatedToken,
   AgentUsage,
+  TreasuryPolicy, TreasuryPolicyVersion, TreasuryMandate, TreasuryCounterparty,
+  TreasuryPaymentIntent, TreasuryBudget, TreasuryBudgetPeriod,
+  TreasuryBudgetReservation, TreasuryApproval, TreasuryApprovalDecision,
+  TreasuryAuthorization, TreasuryKillSwitch, TreasuryLedgerEntry,
 } from './database/entities';
 import { PoliciesModule } from './modules/policies/policies.module';
 import { TrustModule } from './modules/trust/trust.module';
@@ -35,6 +39,7 @@ import { GraphModule } from './modules/graph/graph.module';
 import { SyncModule } from './modules/sync/sync.module';
 import { AssistantModule } from './modules/assistant/assistant.module';
 import { AnalyticsModule } from './modules/analytics/analytics.module';
+import { TreasuryModule } from './modules/treasury/treasury.module';
 
 @Module({
   imports: [
@@ -57,6 +62,10 @@ import { AnalyticsModule } from './modules/analytics/analytics.module';
   EnvironmentFingerprint, AgentKey, AgentAttribute,
   AgentGroup, SyncSource, SyncJob, DocEmbedding,
   DelegatedToken,
+  TreasuryPolicy, TreasuryPolicyVersion, TreasuryMandate, TreasuryCounterparty,
+  TreasuryPaymentIntent, TreasuryBudget, TreasuryBudgetPeriod,
+  TreasuryBudgetReservation, TreasuryApproval, TreasuryApprovalDecision,
+  TreasuryAuthorization, TreasuryKillSwitch, TreasuryLedgerEntry,
     ],
       ssl: process.env.DATABASE_URL?.includes('sslmode=require')
         ? { rejectUnauthorized: false }
@@ -84,6 +93,7 @@ import { AnalyticsModule } from './modules/analytics/analytics.module';
     SyncModule,
     AssistantModule,
     AnalyticsModule,
+    TreasuryModule,
   ],
   controllers: [AppController],
   providers: [AppService, { provide: APP_GUARD, useClass: ApiKeyGuard }],

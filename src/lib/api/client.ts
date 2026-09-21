@@ -96,6 +96,56 @@ interface RawApiKey {
 
 type Query = Record<string, string | number | undefined>;
 
+/** Agent Treasury rows (backend/src/modules/treasury) — snake_case as returned. */
+export interface TreasuryPolicyRow {
+  id: string;
+  name: string;
+  status: string;
+  latest_version: number | null;
+  simulated_at: string | null;
+  latest_document?: Record<string, unknown> | null;
+}
+
+export interface TreasuryIntent {
+  id: string;
+  agent_id: string;
+  rail: string;
+  amount_minor: string;
+  asset_code: string;
+  status: string;
+  decision: string | null;
+  decision_reasons?: Array<{ code?: string; rule_id?: string; message?: string }>;
+  created_at: string;
+}
+
+export interface TreasuryBudget {
+  id: string;
+  name: string;
+  scope_type: string;
+  asset_code: string;
+  period_kind: string;
+  limit_minor: string;
+  status: string;
+}
+
+export interface LedgerRow {
+  seq: number | string;
+  entry_type: string;
+  amount_minor?: string | null;
+  asset_code?: string | null;
+  correlation_id: string;
+  occurred_at: string;
+}
+
+export interface KillSwitch {
+  id: string;
+  scope_type: string;
+  scope_id: string | null;
+  reason: string | null;
+  engaged_at: string;
+  released_at: string | null;
+}
+
 // The dashboard types constrain actions/results to known unions; the API may
 // return anything, so values are sanitized instead of blindly cast.
 const VALID_ACTIONS = ["read", "write", "delete", "execute"] as const;
@@ -587,6 +637,64 @@ export function createApiClient(baseUrl: string, apiKey?: string | null) {
           action: input.action,
         }),
       }).then(mapSimulation),
+
+    // ── Agent Treasury (docs/POLICIES.md sibling; PRD §12.1) ──────────────
+    listTreasuryPolicies: () =>
+      req<unknown>("/v1/treasury/policies", { query: { org_id: DEFAULT_ORG_ID } }).then((rows) =>
+        asArray<TreasuryPolicyRow>(rows),
+      ),
+    createTreasuryPolicy: (input: { name: string; document: unknown; createdBy?: string }) =>
+      req("/v1/treasury/policies", {
+        method: "POST",
+        body: JSON.stringify({
+          name: input.name,
+          document: input.document,
+          created_by: input.createdBy ?? DASHBOARD_USER_ID,
+        }),
+      }),
+    listTreasuryPayments: (limit = 25) =>
+      req<unknown>("/v1/treasury/payments", { query: { org_id: DEFAULT_ORG_ID, limit } }).then((rows) =>
+        asArray<TreasuryIntent>(rows),
+      ),
+    listTreasuryBudgets: () =>
+      req<unknown>("/v1/treasury/budgets", { query: { org_id: DEFAULT_ORG_ID } }).then((rows) =>
+        asArray<TreasuryBudget>(rows),
+      ),
+    createTreasuryBudget: (input: {
+      name: string;
+      scope_type: string;
+      asset_code: string;
+      period_kind: string;
+      limit_minor: string;
+    }) =>
+      req("/v1/treasury/budgets", {
+        method: "POST",
+        body: JSON.stringify({ org_id: DEFAULT_ORG_ID, ...input }),
+      }),
+    listTreasuryLedger: (limit = 25) =>
+      req<{ data?: LedgerRow[] } | LedgerRow[]>("/v1/treasury/ledger", { query: { org_id: DEFAULT_ORG_ID, limit } }).then(
+        (rows) => (Array.isArray(rows) ? rows : rows?.data ?? []),
+      ),
+    verifyTreasuryLedger: () =>
+      req<{ valid: boolean }>("/v1/treasury/ledger/verify", { query: { org_id: DEFAULT_ORG_ID } }).then(
+        (r) => !!r?.valid,
+      ),
+    listTreasuryKillSwitches: () =>
+      req<unknown>("/v1/treasury/kill-switches", { query: { org_id: DEFAULT_ORG_ID } }).then((rows) =>
+        asArray<KillSwitch>(rows),
+      ),
+    engageTreasuryKillSwitch: (input: {
+      scope_type: string;
+      scope_id?: string;
+      engaged_by: string;
+      reason?: string;
+    }) =>
+      req("/v1/treasury/kill-switches", {
+        method: "POST",
+        body: JSON.stringify({ org_id: DEFAULT_ORG_ID, ...input }),
+      }),
+    releaseTreasuryKillSwitch: (id: string) =>
+      req(`/v1/treasury/kill-switches/${encodeURIComponent(id)}?org_id=${DEFAULT_ORG_ID}`, { method: "DELETE" }),
   };
 }
 

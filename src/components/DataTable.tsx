@@ -101,31 +101,39 @@ export default function DataTable<T>({
           <thead>
             <tr className="border-b border-hairline text-left">
               {bulkActions && (
-                <th className="w-10 p-4">
+                <th scope="col" className="w-10 p-4">
                   <Checkbox
                     checked={selected.size === paged.length && paged.length > 0}
                     onCheckedChange={toggleSelectAll}
+                    aria-label="Select all rows on this page"
                   />
                 </th>
               )}
               {columns.map((col) => (
                 <th
                   key={col.id}
-                  className={`p-4 ${col.sortable ? "cursor-pointer select-none" : ""} ${col.className || ""}`}
-                  onClick={() => col.sortable && toggleSort(col.id)}
+                  scope="col"
+                  aria-sort={col.sortable ? (sortCol === col.id ? (sortDir === "asc" ? "ascending" : "descending") : "none") : undefined}
+                  className={`p-4 ${col.className || ""}`}
                 >
-                  <span className="eyebrow flex items-center gap-1.5">
-                    {col.header}
-                    {col.sortable && (
-                      <span className="text-muted-foreground">
+                  {col.sortable ? (
+                    <button
+                      type="button"
+                      onClick={() => toggleSort(col.id)}
+                      className="eyebrow flex cursor-pointer select-none items-center gap-1.5 hover:text-foreground"
+                    >
+                      {col.header}
+                      <span className="text-muted-foreground" aria-hidden="true">
                         {sortCol === col.id ? (
                           sortDir === "asc" ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />
                         ) : (
                           <ChevronsUpDown className="h-3 w-3 opacity-40" />
                         )}
                       </span>
-                    )}
-                  </span>
+                    </button>
+                  ) : (
+                    <span className="eyebrow">{col.header}</span>
+                  )}
                 </th>
               ))}
             </tr>
@@ -149,12 +157,20 @@ export default function DataTable<T>({
                       transition={{ duration: 0.2, delay: Math.min(i * 0.02, 0.2) }}
                       className={`transition-colors ${onRowClick ? "cursor-pointer hover:bg-foreground/[0.04]" : "hover:bg-foreground/[0.02]"}`}
                       onClick={() => onRowClick?.(row)}
+                      onKeyDown={(e) => {
+                        if (onRowClick && (e.key === "Enter" || e.key === " ")) {
+                          e.preventDefault();
+                          onRowClick(row);
+                        }
+                      }}
+                      tabIndex={onRowClick ? 0 : undefined}
                     >
                       {bulkActions && (
                         <td className="w-10 p-4" onClick={(e) => e.stopPropagation()}>
                           <Checkbox
                             checked={selected.has(id)}
                             onCheckedChange={() => toggleSelect(id)}
+                            aria-label={`Select row ${i + 1}`}
                           />
                         </td>
                       )}
@@ -180,9 +196,10 @@ export default function DataTable<T>({
             <button
               onClick={() => setPage((p) => Math.max(0, p - 1))}
               disabled={page === 0}
+              aria-label="Previous page"
               className="rounded-md p-1.5 text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
             >
-              <ChevronLeft className="h-4 w-4" />
+              <ChevronLeft className="h-4 w-4" aria-hidden="true" />
             </button>
             {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
               const p = totalPages <= 5 ? i : Math.max(0, Math.min(page - 2, totalPages - 5)) + i;
@@ -190,6 +207,8 @@ export default function DataTable<T>({
                 <button
                   key={p}
                   onClick={() => setPage(p)}
+                  aria-label={`Page ${p + 1}`}
+                  aria-current={p === page ? "page" : undefined}
                   className={`h-7 w-7 rounded-md text-xs transition-colors ${p === page ? "bg-foreground text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
                 >
                   {p + 1}
@@ -199,9 +218,10 @@ export default function DataTable<T>({
             <button
               onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
               disabled={page >= totalPages - 1}
+              aria-label="Next page"
               className="rounded-md p-1.5 text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
             >
-              <ChevronRight className="h-4 w-4" />
+              <ChevronRight className="h-4 w-4" aria-hidden="true" />
             </button>
           </div>
         </div>

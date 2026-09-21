@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException, BadRequestException, Logger } from '@nestjs/common';
+import { Injectable, UnauthorizedException, BadRequestException, Logger, OnModuleInit } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -9,12 +9,22 @@ import { IdentityService } from '../identity/identity.service';
 import { RedisService } from '../../common/redis/redis.service';
 
 @Injectable()
-export class TokenService {
+export class TokenService implements OnModuleInit {
   private readonly logger = new Logger(TokenService.name);
-  // Server-side RSA key pair for JWT signing
-  private privateKey: string;
-  private publicKey: string;
-  private keyId = 'agentauth-key-1';
+
+  // ── Signing key ring ─────────────────────────────────────────────────
+  // Priority: JWT_PRIVATE_KEY/JWT_PUBLIC_KEY env (ops-managed) → key pair
+  // persisted in Redis (survives restarts, shared across instances) →
+  // ephemeral (last resort). The previous key stays in the JWKS during
+  // rotation so outstanding JWTs keep verifying until they expire.
+  private activeKeyId = 'agentauth-key-1';
+  private activePrivateKey: string;
+  private activePublicKey: string;
+  private previousKeyId: string | null = null;
+  private previousPublicKey: string | null = null;
+
+  private static readonly ACTIVE_KEY_REDIS = 'jwt:signing-key:active';
+  private static readonly PREVIOUS_KEY_REDIS = 'jwt:signing-key:previous';
 
   constructor(
     @InjectRepository(TokenIssued)
@@ -29,27 +39,99 @@ export class TokenService {
     @InjectRepository(AgentUsage)
     private usageRepo: Repository<AgentUsage>,
   ) {
-    // Generate or load RSA key pair for JWT signing
     const envPrivKey = process.env.JWT_PRIVATE_KEY;
     const envPubKey = process.env.JWT_PUBLIC_KEY;
     if (envPrivKey && envPubKey) {
-      this.privateKey = envPrivKey;
-      this.publicKey = envPubKey;
+      this.activePrivateKey = envPrivKey;
+      this.activePublicKey = envPubKey;
+      this.activeKeyId = process.env.JWT_KEY_ID || TokenService.deriveKeyId(envPubKey);
+      // Ops-supplied previous key keeps verification working across rotations.
+      this.previousPublicKey = process.env.JWT_PREVIOUS_PUBLIC_KEY || null;
+      this.previousKeyId = this.previousPublicKey ? TokenService.deriveKeyId(this.previousPublicKey) : null;
     } else {
-      const { privateKey, publicKey } = crypto.generateKeyPairSync('rsa', {
-        modulusLength: 2048,
-        privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
-        publicKeyEncoding: { type: 'spki', format: 'pem' },
-      });
-      this.privateKey = privateKey;
-      this.publicKey = publicKey;
-      this.logger.warn('Generated ephemeral RSA key pair — set JWT_PRIVATE_KEY/JWT_PUBLIC_KEY for persistence');
+      const pair = TokenService.generateKeyPair();
+      this.activePrivateKey = pair.privateKey;
+      this.activePublicKey = pair.publicKey;
     }
     // Configure JwtService to use our private key
     (this.jwtService as any).options = {
       ...(this.jwtService as any).options,
       signOptions: { algorithm: 'RS256', expiresIn: '10m' },
     };
+  }
+
+  /** Load the persisted key pair (or persist the fresh one) after DI. */
+  async onModuleInit(): Promise<void> {
+    if (process.env.JWT_PRIVATE_KEY && process.env.JWT_PUBLIC_KEY) {
+      this.logger.log(`Using env-provided JWT signing keys (kid: ${this.activeKeyId})`);
+      return;
+    }
+    try {
+      const persisted = await this.redis.get(TokenService.ACTIVE_KEY_REDIS);
+      if (persisted) {
+        const stored = JSON.parse(persisted) as { kid: string; privateKey: string; publicKey: string };
+        if (stored.privateKey && stored.publicKey) {
+          this.activeKeyId = stored.kid;
+          this.activePrivateKey = stored.privateKey;
+          this.activePublicKey = stored.publicKey;
+          this.logger.log(`Loaded persisted JWT signing key (kid: ${stored.kid})`);
+          return;
+        }
+      }
+      // No persisted key: store the freshly generated pair so restarts and
+      // sibling instances reuse it instead of silently invalidating tokens.
+      await this.redis.set(
+        TokenService.ACTIVE_KEY_REDIS,
+        JSON.stringify({ kid: this.activeKeyId, privateKey: this.activePrivateKey, publicKey: this.activePublicKey }),
+      );
+      this.logger.warn(
+        'Generated JWT signing key pair — persisted to Redis for reuse. Set JWT_PRIVATE_KEY/JWT_PUBLIC_KEY for ops-managed keys.',
+      );
+    } catch (err) {
+      this.logger.warn(`JWT key persistence unavailable — using ephemeral keys (${err})`);
+    }
+  }
+
+  private static generateKeyPair(): { privateKey: string; publicKey: string } {
+    return crypto.generateKeyPairSync('rsa', {
+      modulusLength: 2048,
+      privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
+      publicKeyEncoding: { type: 'spki', format: 'pem' },
+    });
+  }
+
+  private static deriveKeyId(publicKeyPem: string): string {
+    return crypto.createHash('sha256').update(publicKeyPem).digest('hex').slice(0, 16);
+  }
+
+  /**
+   * Rotate the signing key: the current key moves to "previous" (kept in the
+   * JWKS so outstanding JWTs verify until they expire), a fresh key becomes
+   * active, and both are persisted. Call from an ops/admin surface — never
+   * expose it unauthenticated.
+   */
+  async rotateKeys(): Promise<{ activeKid: string; previousKid: string | null }> {
+    if (process.env.JWT_PRIVATE_KEY && process.env.JWT_PUBLIC_KEY) {
+      throw new BadRequestException(
+        'Keys are managed via JWT_PRIVATE_KEY/JWT_PUBLIC_KEY env — rotate them in your secrets manager instead',
+      );
+    }
+    const pair = TokenService.generateKeyPair();
+    this.previousKeyId = this.activeKeyId;
+    this.previousPublicKey = this.activePublicKey;
+    this.activeKeyId = TokenService.deriveKeyId(pair.publicKey);
+    this.activePrivateKey = pair.privateKey;
+    this.activePublicKey = pair.publicKey;
+    try {
+      await this.redis.set(TokenService.ACTIVE_KEY_REDIS, JSON.stringify({ kid: this.activeKeyId, privateKey: this.activePrivateKey, publicKey: this.activePublicKey }));
+      if (this.previousPublicKey) {
+        await this.redis.set(TokenService.PREVIOUS_KEY_REDIS, JSON.stringify({ kid: this.previousKeyId, publicKey: this.previousPublicKey }));
+      }
+    } catch (err) {
+      this.logger.warn(`Rotated keys could not be persisted — they will be lost on restart (${err})`);
+    }
+    this.logger.log(`JWT signing key rotated (new kid: ${this.activeKeyId})`);
+    return { activeKid: this.activeKeyId, previousKid: this.previousKeyId };
   }
 
   async generateNonce(agentId: string): Promise<{ nonce: string; expires_at: Date }> {
@@ -121,7 +203,7 @@ export class TokenService {
     };
 
     const token = this.jwtService.sign(payload, {
-      privateKey: this.privateKey,
+      privateKey: this.activePrivateKey,
       algorithm: 'RS256',
       expiresIn: `${ttlMinutes}m`,
     });
@@ -179,7 +261,7 @@ export class TokenService {
   async verifyToken(token: string): Promise<any> {
     try {
       const payload = this.jwtService.verify(token, {
-        publicKey: this.publicKey,
+        publicKey: this.activePublicKey,
         algorithms: ['RS256'],
       });
       return {
@@ -196,17 +278,24 @@ export class TokenService {
   }
 
   getJwks(): any {
-    // Return real public key in JWKS format
-    const jwk = crypto.createPublicKey(this.publicKey).export({ format: 'jwk' });
-    return {
-      keys: [
-        {
-          ...jwk,
-          kid: this.keyId,
-          use: 'sig',
-          alg: 'RS256',
-        },
-      ],
-    };
+    // Active key first; a previous key (kept after rotation) lets outstanding
+    // JWTs verify until they naturally expire.
+    const keys: any[] = [
+      {
+        ...crypto.createPublicKey(this.activePublicKey).export({ format: 'jwk' }),
+        kid: this.activeKeyId,
+        use: 'sig',
+        alg: 'RS256',
+      },
+    ];
+    if (this.previousPublicKey) {
+      keys.push({
+        ...crypto.createPublicKey(this.previousPublicKey).export({ format: 'jwk' }),
+        kid: this.previousKeyId,
+        use: 'sig',
+        alg: 'RS256',
+      });
+    }
+    return { keys };
   }
 }

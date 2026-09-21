@@ -79,7 +79,9 @@ test.describe("golden path", () => {
       .poll(async () => {
         const auditResp = await request.get(`${API}/api/v1/audit?org_id=${ORG_ID}&limit=50`);
         if (!auditResp.ok()) return false;
-        const rows = (await auditResp.json()) as Array<{ action: string; result: string }>;
+        // GET /v1/audit returns a paginated envelope: { data: [...], total, ... }
+        const body = (await auditResp.json()) as { data?: Array<{ action: string; result: string }> };
+        const rows = Array.isArray(body) ? body : (body.data ?? []);
         return rows.some((r) => r.action === "approval.approve" && r.result === "allowed");
       })
       .toBe(true);

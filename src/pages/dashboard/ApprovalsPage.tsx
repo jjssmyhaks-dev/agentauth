@@ -156,7 +156,10 @@ export default function ApprovalsPage() {
       <Dialog open={!!denyId} onOpenChange={() => setDenyId(null)}>
         <DialogContent className="border-hairline bg-surface">
           <DialogHeader><DialogTitle>Deny Request</DialogTitle></DialogHeader>
-          <div className="py-4"><Textarea placeholder="Reason for denial..." value={denyReason} onChange={(e) => setDenyReason(e.target.value)} className="rounded-xl border-hairline bg-background" /></div>
+          <div className="py-4">
+            <label htmlFor="deny-reason" className="block text-sm mb-1.5">Reason for denial</label>
+            <Textarea id="deny-reason" placeholder="Reason for denial..." value={denyReason} onChange={(e) => setDenyReason(e.target.value)} className="rounded-xl border-hairline bg-background" />
+          </div>
           <DialogFooter><Button variant="outline" onClick={() => setDenyId(null)} className="rounded-full border-hairline">Cancel</Button><Button variant="destructive" onClick={handleDeny} disabled={!denyReason}>Deny</Button></DialogFooter>
         </DialogContent>
       </Dialog>

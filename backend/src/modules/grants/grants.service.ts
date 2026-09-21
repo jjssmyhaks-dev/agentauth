@@ -21,7 +21,7 @@ export class GrantsService {
     resourceType: string,
     resourcePattern: string,
     allowedActions: string[],
-    createdByUserId: string,
+    createdByUserId?: string,
     expiresAt?: Date,
     usageCap?: number,
   ): Promise<Grant> {

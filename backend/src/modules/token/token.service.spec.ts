@@ -33,6 +33,8 @@ describe('TokenService', () => {
     setNonce: jest.fn().mockResolvedValue(undefined),
     getNonce: jest.fn().mockResolvedValue(null),
     deleteNonce: jest.fn().mockResolvedValue(undefined),
+    get: jest.fn().mockResolvedValue(null),
+    set: jest.fn().mockResolvedValue(undefined),
   };
   const jwtService = {
     sign: jest.fn(() => 'signed.jwt.token'),
@@ -222,6 +224,120 @@ describe('TokenService', () => {
       // A public JWKS must never contain private key material
       expect(jwks.keys[0].d).toBeUndefined();
       expect(jwks.keys[0].p).toBeUndefined();
+    });
+  });
+
+  describe('signing key lifecycle', () => {
+    it('persists a generated key so restarts reuse it', async () => {
+      redis.get.mockResolvedValue(null);
+
+      await service.onModuleInit();
+
+      expect(redis.set).toHaveBeenCalledWith(
+        'jwt:signing-key:active',
+        expect.stringContaining('agentauth-key-1'),
+      );
+      const stored = JSON.parse(redis.set.mock.calls[0][1]);
+      expect(stored.privateKey).toContain('PRIVATE KEY');
+      expect(stored.publicKey).toContain('PUBLIC KEY');
+    });
+
+    it('loads a persisted key on boot instead of generating a new one', async () => {
+      redis.get.mockResolvedValue(
+        JSON.stringify({ kid: 'persisted-kid', privateKey, publicKey }),
+      );
+
+      await service.onModuleInit();
+
+      expect(service.getJwks().keys[0].kid).toBe('persisted-kid');
+      // A token issued after the reload is signed with the persisted key
+      redis.getNonce.mockResolvedValue('agent-1');
+      identityService.findOne.mockResolvedValue(activeAgent);
+      const signer = crypto.createSign('SHA256');
+      signer.update('n');
+      await service.issueToken('agent-1', signer.sign(privateKey, 'base64'), 'n');
+      expect(jwtService.sign).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ privateKey }),
+      );
+    });
+
+    it('env-provided keys take precedence over Redis persistence', async () => {
+      const envPair = crypto.generateKeyPairSync('rsa', {
+        modulusLength: 2048,
+        privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
+        publicKeyEncoding: { type: 'spki', format: 'pem' },
+      });
+      process.env.JWT_PRIVATE_KEY = envPair.privateKey;
+      process.env.JWT_PUBLIC_KEY = envPair.publicKey;
+      try {
+        const module: TestingModule = await Test.createTestingModule({
+          providers: [
+            TokenService,
+            { provide: getRepositoryToken(TokenIssued), useValue: tokenRepo },
+            { provide: getRepositoryToken(Grant), useValue: grantRepo },
+            { provide: getRepositoryToken(Agent), useValue: agentRepo },
+            { provide: getRepositoryToken(AgentUsage), useValue: usageRepo },
+            { provide: IdentityService, useValue: identityService },
+            { provide: RedisService, useValue: redis },
+            { provide: JwtService, useValue: jwtService },
+          ],
+        }).compile();
+        const envService = module.get<TokenService>(TokenService);
+        await envService.onModuleInit();
+
+        // kid is derived from the env public key, and nothing was persisted
+        expect(envService.getJwks().keys[0].kid).not.toBe('agentauth-key-1');
+        expect(redis.set).not.toHaveBeenCalledWith('jwt:signing-key:active', expect.anything());
+      } finally {
+        delete process.env.JWT_PRIVATE_KEY;
+        delete process.env.JWT_PUBLIC_KEY;
+      }
+    });
+
+    it('rotation keeps the previous key in the JWKS for outstanding tokens', async () => {
+      redis.get.mockResolvedValue(null);
+      await service.onModuleInit();
+      jest.clearAllMocks();
+
+      const result = await service.rotateKeys();
+
+      expect(result.activeKid).not.toBe('agentauth-key-1');
+      expect(result.previousKid).toBe('agentauth-key-1');
+      const jwks = service.getJwks();
+      expect(jwks.keys).toHaveLength(2);
+      expect(jwks.keys[0].kid).toBe(result.activeKid);
+      expect(jwks.keys[1].kid).toBe('agentauth-key-1');
+      // Both rotations were persisted
+      expect(redis.set).toHaveBeenCalledWith(
+        'jwt:signing-key:active',
+        expect.stringContaining(result.activeKid),
+      );
+    });
+
+    it('rotation is refused when keys are env-managed', async () => {
+      process.env.JWT_PRIVATE_KEY = 'x';
+      process.env.JWT_PUBLIC_KEY = 'y';
+      try {
+        const module: TestingModule = await Test.createTestingModule({
+          providers: [
+            TokenService,
+            { provide: getRepositoryToken(TokenIssued), useValue: tokenRepo },
+            { provide: getRepositoryToken(Grant), useValue: grantRepo },
+            { provide: getRepositoryToken(Agent), useValue: agentRepo },
+            { provide: getRepositoryToken(AgentUsage), useValue: usageRepo },
+            { provide: IdentityService, useValue: identityService },
+            { provide: RedisService, useValue: redis },
+            { provide: JwtService, useValue: jwtService },
+          ],
+        }).compile();
+        const envService = module.get<TokenService>(TokenService);
+
+        await expect(envService.rotateKeys()).rejects.toThrow(BadRequestException);
+      } finally {
+        delete process.env.JWT_PRIVATE_KEY;
+        delete process.env.JWT_PUBLIC_KEY;
+      }
     });
   });
 });

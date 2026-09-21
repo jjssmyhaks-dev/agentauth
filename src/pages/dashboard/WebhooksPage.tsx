@@ -49,8 +49,8 @@ export default function WebhooksPage() {
         <DialogContent className="border-hairline bg-surface">
           <DialogHeader><DialogTitle>Add Webhook</DialogTitle><DialogDescription className="text-muted-foreground">Send HTTP POST to your endpoint on agent events.</DialogDescription></DialogHeader>
           <div className="space-y-4 py-4">
-            <div className="space-y-2"><Label>URL</Label><Input placeholder="https://your-app.com/webhooks/agentauth" value={url} onChange={(e) => setUrl(e.target.value)} className="rounded-xl border-hairline bg-background" /></div>
-            <div className="space-y-2"><Label>Event Types (comma-separated)</Label><Input placeholder="approval.decided, agent.revoked" value={events} onChange={(e) => setEvents(e.target.value)} className="rounded-xl border-hairline bg-background" /></div>
+            <div className="space-y-2"><Label htmlFor="new-webhook-url">URL</Label><Input id="new-webhook-url" placeholder="https://your-app.com/webhooks/agentauth" value={url} onChange={(e) => setUrl(e.target.value)} className="rounded-xl border-hairline bg-background" /></div>
+            <div className="space-y-2"><Label htmlFor="new-webhook-events">Event Types (comma-separated)</Label><Input id="new-webhook-events" placeholder="approval.decided, agent.revoked" value={events} onChange={(e) => setEvents(e.target.value)} className="rounded-xl border-hairline bg-background" /></div>
           </div>
           <DialogFooter><Button variant="outline" onClick={() => setShowCreate(false)} className="rounded-full border-hairline">Cancel</Button><Button onClick={handleCreate} disabled={!url} className="rounded-full bg-primary text-primary-foreground hover:opacity-90">Add Webhook</Button></DialogFooter>
         </DialogContent>

@@ -6,7 +6,6 @@ import {
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { useAuth } from "@/context/AuthContext";
 import { useDashboard } from "@/context/DashboardContext";
 import { useNotifications } from "@/context/NotificationContext";
@@ -81,7 +80,7 @@ export default function DashboardLayout() {
       )}
 
       {/* Sidebar */}
-      <aside className={`${mobileMenuOpen ? "translate-x-0" : "-translate-x-full"} fixed inset-y-0 left-0 z-50 w-60 flex shrink-0 flex-col border-r border-hairline bg-surface transition-transform duration-200 md:relative md:translate-x-0 ${sidebarOpen ? "md:w-60" : "md:w-14"}`}>
+      <aside id="dashboard-sidebar" aria-label="Dashboard sidebar" className={`${mobileMenuOpen ? "translate-x-0" : "-translate-x-full"} fixed inset-y-0 left-0 z-50 w-60 flex shrink-0 flex-col border-r border-hairline bg-surface transition-transform duration-200 md:relative md:translate-x-0 ${sidebarOpen ? "md:w-60" : "md:w-14"}`}>
         <div className="flex h-14 items-center justify-between border-b border-hairline px-4">
           {sidebarOpen && (
             <Link to="/" className="flex items-center gap-2">
@@ -89,30 +88,38 @@ export default function DashboardLayout() {
               <span className="text-sm font-medium">AgentAuth</span>
             </Link>
           )}
-          <button onClick={() => { if (window.innerWidth < 768) setMobileMenuOpen(!mobileMenuOpen); else setSidebarOpen(!sidebarOpen); }} className="rounded-md p-1 text-muted-foreground hover:text-foreground transition-colors">
+          <button
+            onClick={() => { if (window.innerWidth < 768) setMobileMenuOpen(!mobileMenuOpen); else setSidebarOpen(!sidebarOpen); }}
+            aria-label={window.innerWidth < 768 ? (mobileMenuOpen ? "Close navigation menu" : "Open navigation menu") : sidebarOpen ? "Collapse navigation" : "Expand navigation"}
+            aria-expanded={window.innerWidth < 768 ? mobileMenuOpen : sidebarOpen}
+            className="rounded-md p-1 text-muted-foreground hover:text-foreground transition-colors"
+          >
             {sidebarOpen && window.innerWidth >= 768 ? <ChevronLeft className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
           </button>
         </div>
-        <ScrollArea className="flex-1 py-3">
-          <nav className="space-y-0.5 px-2">
+        {/* Native scroll region: radix ScrollArea's viewport trapped clicks
+            and keyboard scrolling for nav items below the fold. */}
+        <div className="flex-1 overflow-y-auto py-3">
+          <nav aria-label="Dashboard sections" className="space-y-0.5 px-2">
             {navItems.map((item) => {
               const isActive = item.path === "/dashboard" ? location.pathname === "/dashboard" : location.pathname.startsWith(item.path);
               return (
                 <Link key={item.path} to={item.path} title={item.label}
+                  aria-current={isActive ? "page" : undefined}
                   className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${isActive ? "bg-foreground/5 text-foreground font-medium" : "text-muted-foreground hover:text-foreground hover:bg-foreground/5"} ${!sidebarOpen ? "justify-center" : ""}`}>
-                  <item.icon className="h-4 w-4 shrink-0" />
+                  <item.icon className="h-4 w-4 shrink-0" aria-hidden="true" />
                   {sidebarOpen && <span>{item.label}</span>}
                   {item.path === "/dashboard/approvals" && pendingApprovals > 0 && (
-                    <Badge variant="destructive" className={`ml-auto ${!sidebarOpen ? "absolute -top-1 -right-1 h-4 w-4 p-0 text-[10px]" : ""}`}>{pendingApprovals}</Badge>
+                    <Badge variant="destructive" className={`ml-auto ${!sidebarOpen ? "absolute -top-1 -right-1 h-4 w-4 p-0 text-[10px]" : ""}`}><span className="sr-only">Pending approvals: </span>{pendingApprovals}</Badge>
                   )}
                   {item.path === "/dashboard/notifications" && unreadCount > 0 && (
-                    <Badge variant="destructive" className={`ml-auto ${!sidebarOpen ? "absolute -top-1 -right-1 h-4 w-4 p-0 text-[10px]" : ""}`}>{unreadCount > 99 ? "99+" : unreadCount}</Badge>
+                    <Badge variant="destructive" className={`ml-auto ${!sidebarOpen ? "absolute -top-1 -right-1 h-4 w-4 p-0 text-[10px]" : ""}`}><span className="sr-only">Unread notifications: </span>{unreadCount > 99 ? "99+" : unreadCount}</Badge>
                   )}
                 </Link>
               );
             })}
           </nav>
-        </ScrollArea>
+        </div>
         <div className="border-t border-hairline p-3">
           <button onClick={signOut} className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:text-destructive hover:bg-foreground/5 ${!sidebarOpen ? "justify-center" : ""}`}>
             <LogOut className="h-4 w-4" />
@@ -125,23 +132,24 @@ export default function DashboardLayout() {
       <div className="flex flex-1 flex-col overflow-hidden">
         <header className="flex h-14 shrink-0 items-center justify-between border-b border-hairline bg-surface/30 px-4 sm:px-6 backdrop-blur-sm">
           {/* Mobile menu button */}
-          <button onClick={() => setMobileMenuOpen(true)} className="rounded-md p-2 text-muted-foreground hover:text-foreground md:hidden">
+          <button onClick={() => setMobileMenuOpen(true)} aria-label="Open navigation menu" aria-expanded={mobileMenuOpen} aria-controls="dashboard-sidebar" className="rounded-md p-2 text-muted-foreground hover:text-foreground md:hidden">
             <Menu className="h-5 w-5" />
           </button>
           <div className="relative hidden sm:block">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <input type="text" placeholder="Search agents, grants, logs..."
+            <input type="text" placeholder="Search agents, grants, logs..." aria-label="Search agents, grants, and logs"
               className="h-9 w-80 rounded-full border border-hairline bg-background pl-9 pr-3 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring" />
           </div>
           <div className="relative flex items-center gap-1 sm:gap-3">
             <button
               onClick={() => setTheme(theme === "dark" ? "light" : theme === "light" ? "system" : "dark")}
+              aria-label={`Current theme: ${theme}. Switch theme`}
               className="rounded-full p-2 text-muted-foreground hover:text-foreground hover:bg-foreground/5 transition-colors"
               title={`Theme: ${theme}`}
             >
               {theme === "dark" ? <Moon className="h-4 w-4" /> : theme === "light" ? <Sun className="h-4 w-4" /> : <Monitor className="h-4 w-4" />}
             </button>
-            <button ref={bellRef} onClick={toggleNotifPanel} className="relative rounded-full p-2 text-muted-foreground hover:text-foreground hover:bg-foreground/5 transition-colors">
+            <button ref={bellRef} onClick={toggleNotifPanel} aria-label={`Notifications${unreadCount > 0 ? `, ${unreadCount} unread` : ""}`} aria-expanded={notifPanelOpen} className="relative rounded-full p-2 text-muted-foreground hover:text-foreground hover:bg-foreground/5 transition-colors">
               <Bell className="h-4 w-4" />
               {unreadCount > 0 && (
                 <span className="absolute -top-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-destructive text-[10px] text-destructive-foreground">

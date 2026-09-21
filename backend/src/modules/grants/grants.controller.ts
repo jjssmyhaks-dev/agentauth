@@ -13,7 +13,7 @@ export class GrantsController {
   async createGrant(@Body() dto: CreateGrantDto) {
     const grant = await this.grantsService.create(
       dto.agent_id, dto.resource_type, dto.resource_pattern,
-      dto.allowed_actions, '', // created_by_user_id (from auth middleware)
+      dto.allowed_actions, undefined, // created_by_user_id: nullable uuid — '' would 500; populate from auth middleware when it lands
       dto.expires_at ? new Date(dto.expires_at) : undefined,
       dto.usage_cap,
     );

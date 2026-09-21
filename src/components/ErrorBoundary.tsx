@@ -20,6 +20,11 @@ export default class ErrorBoundary extends Component<Props, State> {
   }
 
   static getDerivedStateFromError(error: Error): State {
+    // Expose for support/diagnostics — the spinner fallback otherwise hides
+    // the actual error from anyone inspecting the page.
+    if (typeof window !== "undefined") {
+      (window as unknown as { __LAST_BOUNDARY_ERROR?: Error }).__LAST_BOUNDARY_ERROR = error;
+    }
     return { hasError: true, error };
   }
 

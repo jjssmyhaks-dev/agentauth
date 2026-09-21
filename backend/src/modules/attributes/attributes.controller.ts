@@ -5,17 +5,20 @@ import { IsString, IsOptional, IsArray, ValidateNested, IsUUID } from 'class-val
 import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
+export class AttributeItemDto {
+  @ApiProperty() @IsString() key: string;
+  @ApiProperty() @IsString() value: string;
+}
+
 export class SetAttributesDto {
-  @ApiProperty({ type: [{ key: String, value: String }] })
+  // A lazy type resolver is required here: an inline object literal like
+  // `type: [{ key: String, value: String }]` crashes @nestjs/swagger at
+  // bootstrap with a circular-dependency error while building the schema.
+  @ApiProperty({ type: () => AttributeItemDto, isArray: true })
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => AttributeItemDto)
   attributes: AttributeItemDto[];
-}
-
-export class AttributeItemDto {
-  @ApiProperty() @IsString() key: string;
-  @ApiProperty() @IsString() value: string;
 }
 
 export class CreateGroupDto {

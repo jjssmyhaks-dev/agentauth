@@ -1,5 +1,5 @@
 import * as path from 'path';
-import { Module, MiddlewareConsumer, NestModule } from '@nestjs/common';
+import { Module, MiddlewareConsumer, NestModule, RequestMethod } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { RedisModule } from './common/redis/redis.module';
@@ -84,8 +84,17 @@ import { AnalyticsModule } from './modules/analytics/analytics.module';
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
+    // Rate-limit every API route per org (fallback key when no org context:
+    // client IP). Health/docs/JWKS stay open — they must answer for
+    // monitoring, humans, and token verification even when throttled.
     consumer
       .apply(RateLimiterMiddleware)
-      .forRoutes('v1/tokens', 'v1/permissions', 'v1/analytics');
+      .exclude(
+        { path: 'health', method: RequestMethod.GET },
+        { path: 'docs', method: RequestMethod.GET },
+        { path: 'docs/(.*)', method: RequestMethod.GET },
+        { path: '.well-known/(.*)', method: RequestMethod.GET },
+      )
+      .forRoutes('*');
   }
 }

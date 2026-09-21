@@ -16,13 +16,12 @@ export default defineConfig({
     globals: true,
     environment: "jsdom",
     setupFiles: ["./vitest.setup.ts"],
-    css: false,
-    exclude: [
-      "node_modules/**",
-      "dist/**",
+    css: false,    exclude: [
+      "**/node_modules/**",
+      "**/dist/**",
+      "**/e2e/**",
       "backend/**",
       "frontend/**",
-      "convex/**",
     ],
   },
 });

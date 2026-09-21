@@ -115,9 +115,15 @@ function sanitizeResult(raw: string): AuditEntry["result"] {
   return (AUDIT_RESULTS as readonly string[]).includes(raw) ? (raw as AuditEntry["result"]) : "allowed";
 }
 
-/** Some list endpoints return a bare array; others return info objects. */
+/** Some list endpoints return a bare array; others a paginated envelope or info object. */
 function asArray<T>(value: unknown): T[] {
-  return Array.isArray(value) ? (value as T[]) : [];
+  if (Array.isArray(value)) return value as T[];
+  // Paginated envelope ({ data: [...], total, page, pages }) as returned by
+  // GET /v1/audit.
+  if (value && typeof value === "object" && Array.isArray((value as { data?: unknown }).data)) {
+    return (value as { data: T[] }).data;
+  }
+  return [];
 }
 
 function toQuery(params: Query): string {
@@ -206,7 +212,15 @@ function mapApproval(raw: RawApproval): Approval {
     action: sanitizeAction(raw.action),
     resource: raw.resource,
     resourceType: raw.resource_type ?? "api",
-    context: raw.context ?? "",
+    // The API stores context as jsonb (any JSON value) but the dashboard
+    // renders it as text — stringify non-strings so an object payload can't
+    // crash the approval cards ("Objects are not valid as a React child").
+    context:
+      raw.context == null
+        ? ""
+        : typeof raw.context === "string"
+          ? raw.context
+          : JSON.stringify(raw.context),
     status: raw.status as Approval["status"],
     requestedAt: raw.requested_at,
     decidedAt: raw.decided_at ?? null,

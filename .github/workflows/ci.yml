@@ -11,9 +11,9 @@ jobs:
     name: Dashboard (root Vite app)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
@@ -33,44 +33,50 @@ jobs:
   backend:
     name: Backend (NestJS API)
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
           cache-dependency-path: backend/package-lock.json
 
       - name: Install dependencies
-        run: npm ci --prefix backend --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
 
       - name: Build
-        run: npm run build --prefix backend
+        run: npm run build
 
       - name: Unit tests
-        run: npm test --prefix backend -- --silent
+        run: npm test -- --silent
 
   frontend:
     name: Dashboard (Next.js app)
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
       - name: Install dependencies
-        run: npm ci --prefix frontend --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
 
       - name: Typecheck
-        run: npm --prefix frontend exec -- tsc --noEmit
+        run: npx --no-install tsc --noEmit
 
       - name: Build
-        run: npm run build --prefix frontend
+        run: npm run build
 
   e2e:
     name: E2E (golden path)
@@ -100,9 +106,9 @@ jobs:
           --health-timeout 3s
           --health-retries 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
@@ -111,7 +117,8 @@ jobs:
         run: npm ci --no-audit --no-fund
 
       - name: Install backend dependencies
-        run: npm ci --prefix backend --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
+        working-directory: backend
 
       - name: Install Playwright browser
         run: npx playwright install --with-deps chromium

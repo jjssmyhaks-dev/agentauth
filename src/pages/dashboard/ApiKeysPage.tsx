@@ -57,7 +57,7 @@ export default function ApiKeysPage() {
       </Card>
       <Dialog open={showCreate} onOpenChange={setShowCreate}>
         <DialogContent className="border-hairline bg-surface"><DialogHeader><DialogTitle>New API Key</DialogTitle><DialogDescription className="text-muted-foreground">Generate a new API key for programmatic access.</DialogDescription></DialogHeader>
-          <div className="space-y-4 py-4"><div className="space-y-2"><Label>Name</Label><Input placeholder="e.g., Production Backend" value={name} onChange={(e) => setName(e.target.value)} className="rounded-xl border-hairline bg-background" /></div></div>
+          <div className="space-y-4 py-4"><div className="space-y-2"><Label htmlFor="new-api-key-name">Name</Label><Input id="new-api-key-name" placeholder="e.g., Production Backend" value={name} onChange={(e) => setName(e.target.value)} className="rounded-xl border-hairline bg-background" /></div></div>
           <DialogFooter><Button variant="outline" onClick={() => setShowCreate(false)} className="rounded-full border-hairline">Cancel</Button><Button onClick={handleCreate} disabled={!name} className="rounded-full bg-primary text-primary-foreground hover:opacity-90"><Key className="mr-2 h-4 w-4" /> Generate Key</Button></DialogFooter>
         </DialogContent>
       </Dialog>

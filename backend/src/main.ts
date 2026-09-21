@@ -20,9 +20,21 @@ async function bootstrap() {
   // Global exception filter (prevents stack trace leaks)
   app.useGlobalFilters(new AllExceptionsFilter());
 
-  // CORS
+  // CORS — no wildcard default. An explicit CORS_ORIGIN is required in
+  // production; in development the dashboard's default origins are allowed.
+  // (The `*` default silently enabled any site to call the API with
+  // credentials — the opposite of what an auth platform should do.)
+  const isProd = (process.env.NODE_ENV || 'development') === 'production';
+  const corsOrigin = process.env.CORS_ORIGIN
+    ? process.env.CORS_ORIGIN.split(',').map((o) => o.trim()).filter(Boolean)
+    : isProd
+      ? [] // empty list = deny all cross-origin (same-origin / non-browser clients still work)
+      : ['http://localhost:5173', 'http://127.0.0.1:5173', 'http://localhost:4173', 'http://127.0.0.1:4173'];
+  if (isProd && corsOrigin.length === 0) {
+    console.warn('CORS_ORIGIN not set — cross-origin browser requests will be denied. Set CORS_ORIGIN to your dashboard origin(s).');
+  }
   app.enableCors({
-    origin: process.env.CORS_ORIGIN || '*',
+    origin: corsOrigin,
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
     credentials: true,
   });
@@ -51,7 +63,10 @@ async function bootstrap() {
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('docs', app, document);
 
-  const port = process.env.PORT || 4000;
+  // `|| 4000` also recovers from PORT=0 / unparsable values leaking in from
+  // the environment — an unset port should mean the documented default, not
+  // an OS-assigned random one.
+  const port = parseInt(process.env.PORT || '4000', 10) || 4000;
   await app.listen(port);
   console.log(`AgentAuth backend running on port ${port}`);
   console.log(`API docs: http://0.0.0.0:${port}/docs`);

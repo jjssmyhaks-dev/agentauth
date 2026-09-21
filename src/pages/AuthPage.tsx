@@ -99,8 +99,9 @@ export default function AuthPage() {
         >
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-sm mb-1.5">Email address</label>
+              <label htmlFor="aa-email" className="block text-sm mb-1.5">Email address</label>
               <motion.input
+                id="aa-email"
                 whileFocus={{ scale: 1.01 }}
                 transition={{ duration: 0.15 }}
                 type="email" value={email} onChange={(e) => setEmail(e.target.value)}
@@ -109,8 +110,9 @@ export default function AuthPage() {
               />
             </div>
             <div>
-              <label className="block text-sm mb-1.5">Password</label>
+              <label htmlFor="aa-password" className="block text-sm mb-1.5">Password</label>
               <motion.input
+                id="aa-password"
                 whileFocus={{ scale: 1.01 }}
                 transition={{ duration: 0.15 }}
                 type="password" value={password} onChange={(e) => setPassword(e.target.value)}

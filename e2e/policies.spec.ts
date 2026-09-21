@@ -34,8 +34,13 @@ test.describe("policy engine", () => {
     await signIn(page);
 
     // The wizard auto-opens on a fresh profile; if so, onboard with defaults.
+    // Wait deterministically for EITHER the wizard OR the dashboard nav — a
+    // fixed probe races slow environments where the wizard mounts late and
+    // replaces the whole layout (no nav to find).
     const wizardHeading = page.getByRole("heading", { name: /create your first agent/i });
-    if (await wizardHeading.isVisible({ timeout: 5_000 }).catch(() => false)) {
+    const dashNav = page.getByRole("navigation", { name: "Dashboard sections" });
+    await expect(wizardHeading.or(dashNav)).toBeVisible({ timeout: 30_000 });
+    if (await wizardHeading.isVisible()) {
       const agentName = `e2e-policy-agent-${Date.now().toString(36)}`;
       await page.getByPlaceholder("e.g., Code Review Bot").fill(agentName);
       await page.getByRole("button", { name: /continue/i }).click();

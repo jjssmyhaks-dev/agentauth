@@ -222,6 +222,52 @@ export interface AlertRule {
   notifyChannels: ("dashboard" | "email" | "webhook")[];
 }
 
+// Policies
+export type PolicyScope = "org" | "agent" | "agent_group";
+export type PolicyAction = "allow" | "require_approval" | "step_up" | "deny";
+export type PolicyTrigger =
+  | "permission_check"
+  | "new_environment"
+  | "trust_below_threshold"
+  | "session_mismatch"
+  | "off_hours"
+  | "resource_sensitivity_high";
+
+/** Context field → expected value, $operator object, or boolean shorthand. */
+export type PolicyCondition = Record<string, unknown>;
+
+export interface Policy {
+  id: string;
+  orgId: string;
+  scope: PolicyScope;
+  scopeTargetId: string | null;
+  trigger: PolicyTrigger;
+  condition: PolicyCondition;
+  action: PolicyAction;
+  priority: number;
+  enabled: boolean;
+  description: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PolicySimulationResult {
+  wouldFire: boolean;
+  policiesChecked: number;
+  result: {
+    matched: boolean;
+    policyId?: string;
+    action: PolicyAction;
+    reason?: string;
+  };
+  evaluatedOrder: Array<{
+    policyId: string;
+    action: PolicyAction;
+    priority: number;
+    reason: string;
+  }>;
+}
+
 export interface Alert {
   id: string;
   ruleId: string;

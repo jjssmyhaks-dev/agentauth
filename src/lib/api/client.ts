@@ -4,7 +4,7 @@
  * (src/types/index.ts). Fields the API does not provide yet (trust score,
  * tags, tiers) are filled with sensible defaults rather than faked data.
  */
-import type { Agent, Grant, Approval, AuditEntry, ApiKey, Action } from "@/types";
+import type { Agent, Grant, Approval, AuditEntry, ApiKey, Action, Policy, PolicySimulationResult } from "@/types";
 import { DEFAULT_ORG_ID } from "./config";
 
 /** Fixed, valid-UUID actor for dashboard-initiated decisions. */
@@ -257,6 +257,95 @@ function mapApiKey(raw: RawApiKey): ApiKey {
   };
 }
 
+interface RawPolicy {
+  id: string;
+  org_id: string;
+  scope: string;
+  scope_target_id?: string | null;
+  trigger: string;
+  condition: Record<string, unknown>;
+  action: string;
+  priority?: number;
+  enabled?: boolean;
+  description?: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+interface RawSimulation {
+  would_fire?: boolean;
+  policies_checked?: number;
+  result?: {
+    matched?: boolean;
+    policy_id?: string;
+    action?: string;
+    reason?: string;
+  };
+  evaluated_order?: Array<{
+    policy_id?: string;
+    action?: string;
+    priority?: number;
+    reason?: string;
+  }>;
+}
+
+const POLICY_SCOPES = ["org", "agent", "agent_group"] as const;
+const POLICY_ACTIONS = ["allow", "require_approval", "step_up", "deny"] as const;
+const POLICY_TRIGGERS = [
+  "permission_check",
+  "new_environment",
+  "trust_below_threshold",
+  "session_mismatch",
+  "off_hours",
+  "resource_sensitivity_high",
+] as const;
+
+function mapPolicy(raw: RawPolicy): Policy {
+  return {
+    id: raw.id,
+    orgId: raw.org_id,
+    scope: (POLICY_SCOPES as readonly string[]).includes(raw.scope)
+      ? (raw.scope as Policy["scope"])
+      : "org",
+    scopeTargetId: raw.scope_target_id ?? null,
+    trigger: (POLICY_TRIGGERS as readonly string[]).includes(raw.trigger)
+      ? (raw.trigger as Policy["trigger"])
+      : "permission_check",
+    condition: raw.condition ?? {},
+    action: (POLICY_ACTIONS as readonly string[]).includes(raw.action)
+      ? (raw.action as Policy["action"])
+      : "require_approval",
+    priority: raw.priority ?? 0,
+    enabled: raw.enabled ?? true,
+    description: raw.description ?? null,
+    createdAt: raw.created_at ?? new Date().toISOString(),
+    updatedAt: raw.updated_at ?? raw.created_at ?? new Date().toISOString(),
+  };
+}
+
+function mapSimulation(raw: RawSimulation): PolicySimulationResult {
+  return {
+    wouldFire: raw.would_fire ?? false,
+    policiesChecked: raw.policies_checked ?? 0,
+    result: {
+      matched: raw.result?.matched ?? false,
+      policyId: raw.result?.policy_id,
+      action: ((POLICY_ACTIONS as readonly string[]).includes(raw.result?.action ?? "")
+        ? raw.result?.action
+        : "allow") as PolicySimulationResult["result"]["action"],
+      reason: raw.result?.reason,
+    },
+    evaluatedOrder: (raw.evaluated_order ?? []).map((m) => ({
+      policyId: m.policy_id ?? "",
+      action: ((POLICY_ACTIONS as readonly string[]).includes(m.action ?? "")
+        ? m.action
+        : "allow") as PolicySimulationResult["evaluatedOrder"][number]["action"],
+      priority: m.priority ?? 0,
+      reason: m.reason ?? "",
+    })),
+  };
+}
+
 /** REST client for the AgentAuth backend. All methods throw ApiError on failure. */
 export function createApiClient(baseUrl: string) {
   const req = <T>(path: string, init?: RequestInit & { query?: Query }) =>
@@ -337,6 +426,72 @@ export function createApiClient(baseUrl: string) {
         headers: { "x-org-id": DEFAULT_ORG_ID },
         body: JSON.stringify({ name, scopes: ["read"] }),
       }).then(mapApiKey),
+
+    listPolicies: () =>
+      req<unknown>("/v1/policies", { query: { org_id: DEFAULT_ORG_ID } }).then((rows) =>
+        asArray<RawPolicy>(rows).map(mapPolicy),
+      ),
+    createPolicy: (input: {
+      scope: Policy["scope"];
+      scopeTargetId?: string | null;
+      trigger: Policy["trigger"];
+      condition: Policy["condition"];
+      action: Policy["action"];
+      priority?: number;
+      description?: string;
+    }) =>
+      req<{ policy_id: string }>("/v1/policies", {
+        method: "POST",
+        body: JSON.stringify({
+          org_id: DEFAULT_ORG_ID,
+          scope: input.scope,
+          scope_target_id: input.scopeTargetId || undefined,
+          trigger: input.trigger,
+          condition: input.condition,
+          action: input.action,
+          priority: input.priority ?? 0,
+          description: input.description || undefined,
+        }),
+      }).then((r) => r.policy_id),
+    updatePolicy: (id: string, updates: Partial<Pick<Policy, "enabled" | "action" | "priority">>) =>
+      req(`/v1/policies/${encodeURIComponent(id)}`, {
+        method: "PUT",
+        body: JSON.stringify({
+          enabled: updates.enabled,
+          action: updates.action,
+          priority: updates.priority,
+        }),
+      }),
+    deletePolicy: (id: string) =>
+      req(`/v1/policies/${encodeURIComponent(id)}`, { method: "DELETE" }),
+    simulatePolicy: (input: {
+      trigger: Policy["trigger"];
+      agentId: string;
+      currentTrustLevel?: string;
+      sessionMismatch?: boolean;
+      newEnvironment?: boolean;
+      resourceSensitivity?: string;
+      offHours?: boolean;
+      resourceType?: string;
+      resourceId?: string;
+      action?: string;
+    }) =>
+      req<RawSimulation>("/v1/policies/simulate", {
+        method: "POST",
+        body: JSON.stringify({
+          org_id: DEFAULT_ORG_ID,
+          agent_id: input.agentId,
+          trigger: input.trigger,
+          current_trust_level: input.currentTrustLevel,
+          session_mismatch: input.sessionMismatch,
+          new_environment: input.newEnvironment,
+          resource_sensitivity: input.resourceSensitivity,
+          off_hours: input.offHours,
+          resource_type: input.resourceType,
+          resource_id: input.resourceId,
+          action: input.action,
+        }),
+      }).then(mapSimulation),
   };
 }
 

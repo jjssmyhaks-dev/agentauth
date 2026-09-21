@@ -15,6 +15,7 @@ const OverviewPage = lazy(() => import("@/pages/dashboard/OverviewPage"));
 const AgentsPage = lazy(() => import("@/pages/dashboard/AgentsPage"));
 const AgentDetailPage = lazy(() => import("@/pages/dashboard/AgentDetailPage"));
 const GrantsPage = lazy(() => import("@/pages/dashboard/GrantsPage"));
+const PoliciesPage = lazy(() => import("@/pages/dashboard/PoliciesPage"));
 const ApprovalsPage = lazy(() => import("@/pages/dashboard/ApprovalsPage"));
 const ActivityPage = lazy(() => import("@/pages/dashboard/ActivityPage"));
 const AnalyticsPage = lazy(() => import("@/pages/dashboard/AnalyticsPage"));
@@ -108,6 +109,7 @@ function AppRoutes() {
         <Route path="agents" element={<AgentsPage />} />
         <Route path="agents/:id" element={<AgentDetailPage />} />
         <Route path="grants" element={<GrantsPage />} />
+        <Route path="policies" element={<PoliciesPage />} />
         <Route path="approvals" element={<ApprovalsPage />} />
         <Route path="activity" element={<ActivityPage />} />
         <Route path="analytics" element={<AnalyticsPage />} />

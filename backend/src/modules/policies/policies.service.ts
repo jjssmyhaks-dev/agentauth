@@ -25,7 +25,16 @@ export class PoliciesService {
     if (!['org', 'agent', 'agent_group'].includes(scope)) {
       throw new BadRequestException('Invalid scope');
     }
-    if (!['new_environment', 'trust_below_threshold', 'session_mismatch', 'off_hours', 'resource_sensitivity_high'].includes(trigger)) {
+    if (
+      ![
+        'permission_check',
+        'new_environment',
+        'trust_below_threshold',
+        'session_mismatch',
+        'off_hours',
+        'resource_sensitivity_high',
+      ].includes(trigger)
+    ) {
       throw new BadRequestException('Invalid trigger');
     }
     if (!['allow', 'require_approval', 'step_up', 'deny'].includes(action)) {

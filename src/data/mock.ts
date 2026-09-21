@@ -1,4 +1,4 @@
-import type { Agent, Grant, Approval, AuditEntry, ApiKey, Webhook, AgentStats, Org, Notification, AgentHealth, AgentSession, Alert, AlertRule, AlertCategory, AlertSeverity } from "@/types";
+import type { Agent, Grant, Approval, AuditEntry, ApiKey, Webhook, AgentStats, Org, Notification, AgentHealth, AgentSession, Alert, AlertRule, AlertCategory, AlertSeverity, Policy } from "@/types";
 
 function hashCode(str: string): string {
   let hash = 0;
@@ -370,6 +370,65 @@ export const mockAuditLog: AuditEntry[] = [
   entry("ae_013", "2025-08-30T02:30:00Z", "ops@acme.com", "user", "approval_denied", "approval", "ap_005", "denied"),
   entry("ae_014", "2025-08-30T02:15:00Z", "system", "system", "token_expired", "token", "tok_xK9...", "revoked"),
   entry("ae_015", "2025-08-30T02:00:00Z", "Code Review Bot", "agent", "read", "repository", "acme-corp/frontend", "allowed"),
+];
+
+export const mockPolicies: Policy[] = [
+  {
+    id: "pol_001",
+    orgId: "org_01HX8K...",
+    scope: "org",
+    scopeTargetId: null,
+    trigger: "permission_check",
+    condition: { resource_type: "database", action: "delete" },
+    action: "require_approval",
+    priority: 100,
+    enabled: true,
+    description: "Database deletes always need a human",
+    createdAt: "2025-08-01T09:00:00Z",
+    updatedAt: "2025-08-20T14:30:00Z",
+  },
+  {
+    id: "pol_002",
+    orgId: "org_01HX8K...",
+    scope: "agent",
+    scopeTargetId: "ag_01H8X9A1B2C3D4E5F6G7H8I9",
+    trigger: "permission_check",
+    condition: { off_hours: true, resource_type: "repository" },
+    action: "deny",
+    priority: 90,
+    enabled: true,
+    description: "Code Review Bot: no repo writes after hours",
+    createdAt: "2025-08-05T09:00:00Z",
+    updatedAt: "2025-08-05T09:00:00Z",
+  },
+  {
+    id: "pol_003",
+    orgId: "org_01HX8K...",
+    scope: "org",
+    scopeTargetId: null,
+    trigger: "session_mismatch",
+    condition: {},
+    action: "deny",
+    priority: 80,
+    enabled: true,
+    description: "Session hijack attempt: deny and alert",
+    createdAt: "2025-08-10T09:00:00Z",
+    updatedAt: "2025-08-10T09:00:00Z",
+  },
+  {
+    id: "pol_004",
+    orgId: "org_01HX8K...",
+    scope: "org",
+    scopeTargetId: null,
+    trigger: "trust_below_threshold",
+    condition: { current_trust_level: "untrusted" },
+    action: "step_up",
+    priority: 70,
+    enabled: false,
+    description: "Untrusted agents must re-verify before acting",
+    createdAt: "2025-08-12T09:00:00Z",
+    updatedAt: "2025-08-18T11:00:00Z",
+  },
 ];
 
 export const mockApiKeys: ApiKey[] = [

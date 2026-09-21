@@ -5,12 +5,16 @@ import { GrantsService } from './grants.service';
 import { GrantsController } from './grants.controller';
 import { TokenModule } from '../token/token.module';
 import { IdentityModule } from '../identity/identity.module';
+import { PoliciesModule } from '../policies/policies.module';
+import { AuditModule } from '../audit/audit.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Grant]),
     TokenModule,
     IdentityModule,
+    PoliciesModule,
+    AuditModule,
   ],
   controllers: [GrantsController],
   providers: [GrantsService],

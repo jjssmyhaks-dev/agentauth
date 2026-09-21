@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useCallback, useMemo, useEffect, type ReactNode } from "react";
-import type { Agent, Grant, Approval, AuditEntry, ApiKey, Webhook, AgentStats } from "@/types";
+import type { Agent, Grant, Approval, AuditEntry, ApiKey, Webhook, AgentStats, Policy } from "@/types";
 import {
   mockAgents,
   mockGrants,
@@ -8,6 +8,7 @@ import {
   mockApiKeys,
   mockWebhooks,
   mockAgentStats,
+  mockPolicies,
 } from "@/data/mock";
 import { resolveDataSource } from "@/lib/dataSource";
 import { ApiError, type ApiClient } from "@/lib/api/client";
@@ -22,6 +23,11 @@ interface DashboardContextType {
   apiKeys: ApiKey[];
   webhooks: Webhook[];
   agentStats: AgentStats[];
+  policies: Policy[];
+  /** Creates the policy; resolves to the backend id in API mode. */
+  addPolicy: (policy: Omit<Policy, "id" | "orgId" | "createdAt" | "updatedAt">) => Promise<string>;
+  setPolicyEnabled: (id: string, enabled: boolean) => void;
+  deletePolicy: (id: string) => void;
   pendingApprovals: number;
   totalTokens: number;
   totalActions: number;
@@ -56,6 +62,7 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
   const [apiKeys, setApiKeys] = useState<ApiKey[]>(mockApiKeys);
   const [webhooks, setWebhooks] = useState<Webhook[]>(mockWebhooks);
   const [agentStats] = useState<AgentStats[]>(mockAgentStats);
+  const [policies, setPolicies] = useState<Policy[]>(mockPolicies);
 
   const pendingApprovals = useMemo(() => approvals.filter((a) => a.status === "pending").length, [approvals]);
   const totalTokens = useMemo(() => agents.reduce((s, a) => s + a.tokensIssued, 0), [agents]);
@@ -63,12 +70,13 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
 
   // ── API-mode refetch (replaces the mock seed with real data) ─────────
   const refetchAll = useCallback(async (client: NonNullable<Awaited<ReturnType<typeof resolveDataSource>>["client"]>) => {
-    const [fetchedAgents, fetchedGrants, fetchedApprovals, fetchedAudit, fetchedKeys] = await Promise.all([
+    const [fetchedAgents, fetchedGrants, fetchedApprovals, fetchedAudit, fetchedKeys, fetchedPolicies] = await Promise.all([
       client.listAgents(),
       client.listGrants(),
       client.listApprovals(),
       client.listAudit(),
       client.listApiKeys(),
+      client.listPolicies(),
     ]);
     // Authoritative: an empty API list means an empty dashboard — showing
     // mock rows next to real API writes would be actively misleading.
@@ -77,6 +85,7 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
     setApprovals(fetchedApprovals);
     setAuditLog(fetchedAudit);
     setApiKeys(fetchedKeys);
+    setPolicies(fetchedPolicies);
   }, []);
 
   useEffect(() => {
@@ -280,6 +289,68 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
     setApprovals((prev) => [approval, ...prev]);
   }, []);
 
+  const addPolicy = useCallback(
+    async (policy: Omit<Policy, "id" | "orgId" | "createdAt" | "updatedAt">): Promise<string> => {
+      const localId = "pol_" + Date.now().toString(36);
+      setPolicies((prev) => [
+        { ...policy, id: localId, orgId: "local", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+        ...prev,
+      ]);
+      if (dataSource !== "api") return localId;
+      const { client } = await resolveDataSource();
+      if (!client) return localId;
+      try {
+        const apiId = await client.createPolicy({
+          scope: policy.scope,
+          scopeTargetId: policy.scopeTargetId,
+          trigger: policy.trigger,
+          condition: policy.condition,
+          action: policy.action,
+          priority: policy.priority,
+          description: policy.description ?? undefined,
+        });
+        await refetchAll(client);
+        return apiId;
+      } catch (err) {
+        if (err instanceof ApiError) {
+          // eslint-disable-next-line no-console
+          console.error(`[agentauth] API write failed (${err.status}): ${err.message}`);
+        } else {
+          // eslint-disable-next-line no-console
+          console.error("[agentauth] API write failed:", err);
+        }
+        return localId;
+      }
+    },
+    [dataSource, refetchAll],
+  );
+
+  const setPolicyEnabled = useCallback(
+    (id: string, enabled: boolean) => {
+      withApi(
+        () => setPolicies((prev) => prev.map((p) => (p.id === id ? { ...p, enabled } : p))),
+        async (client) => {
+          await client.updatePolicy(id, { enabled });
+          await refetchAll(client);
+        },
+      );
+    },
+    [withApi, refetchAll],
+  );
+
+  const deletePolicy = useCallback(
+    (id: string) => {
+      withApi(
+        () => setPolicies((prev) => prev.filter((p) => p.id !== id)),
+        async (client) => {
+          await client.deletePolicy(id);
+          await refetchAll(client);
+        },
+      );
+    },
+    [withApi, refetchAll],
+  );
+
   const incrementAgentTokens = useCallback((agentId: string, delta = 1) => {
     setAgents((prev) =>
       prev.map((a) => (a.id === agentId ? { ...a, tokensIssued: a.tokensIssued + delta, lastActiveAt: new Date().toISOString() } : a)),
@@ -302,10 +373,11 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
     <DashboardContext.Provider
       value={{
         dataSource,
-        agents, grants, approvals, auditLog, apiKeys, webhooks, agentStats,
+        agents, grants, approvals, auditLog, apiKeys, webhooks, agentStats, policies,
         pendingApprovals, totalTokens, totalActions,
         addAgent, updateAgent, addGrant, addApproval, approveRequest, denyRequest, revokeAgent, revokeAllAgents, revokeGrant,
         addApiKey, revokeApiKey, addWebhook, pauseWebhook, addAuditEntry,
+        addPolicy, setPolicyEnabled, deletePolicy,
         incrementAgentTokens, incrementAgentActions,
       }}
     >

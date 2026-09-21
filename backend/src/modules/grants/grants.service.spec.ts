@@ -5,6 +5,8 @@ import { GrantsService } from './grants.service';
 import { Grant, Agent } from '../../database/entities';
 import { TokenService } from '../token/token.service';
 import { IdentityService } from '../identity/identity.service';
+import { PolicyEngineService } from '../policies/policy-engine.service';
+import { AuditService } from '../audit/audit.service';
 import { NotFoundException } from '@nestjs/common';
 
 describe('GrantsService', () => {
@@ -12,6 +14,7 @@ describe('GrantsService', () => {
   let grantRepo: jest.Mocked<Repository<Grant>>;
   let tokenService: jest.Mocked<TokenService>;
   let identityService: jest.Mocked<IdentityService>;
+  let policyEngine: jest.Mocked<PolicyEngineService>;
 
   const mockGrant: Partial<Grant> = {
     id: 'grant-1',
@@ -60,6 +63,18 @@ describe('GrantsService', () => {
             } as Agent),
           },
         },
+        {
+          provide: PolicyEngineService,
+          useValue: {
+            evaluate: jest.fn().mockResolvedValue({ matched: false, action: 'allow' }),
+          },
+        },
+        {
+          provide: AuditService,
+          useValue: {
+            logEntry: jest.fn().mockResolvedValue({}),
+          },
+        },
       ],
     }).compile();
 
@@ -67,6 +82,7 @@ describe('GrantsService', () => {
     grantRepo = module.get(getRepositoryToken(Grant));
     tokenService = module.get(TokenService);
     identityService = module.get(IdentityService);
+    policyEngine = module.get(PolicyEngineService);
   });
 
   it('should be defined', () => {
@@ -107,6 +123,52 @@ describe('GrantsService', () => {
     it('should increment usage count on successful check', async () => {
       await service.checkPermission('valid-token', 'database', 'users/123', 'read');
       expect(grantRepo.increment).toHaveBeenCalledWith({ id: 'grant-1' }, 'usage_count', 1);
+    });
+
+    it('should deny when a policy denies the matched grant', async () => {
+      policyEngine.evaluate.mockResolvedValueOnce({
+        matched: true,
+        policy_id: 'policy-deny',
+        action: 'deny',
+        reason: 'Policy "Lockdown" matched trigger "permission_check"',
+      });
+      const result = await service.checkPermission('valid-token', 'database', 'users/123', 'read');
+      expect(result.allowed).toBe(false);
+      expect(result.reason).toBe('policy_denied');
+      expect(result.matched_policy_id).toBe('policy-deny');
+      expect(grantRepo.increment).not.toHaveBeenCalled();
+    });
+
+    it('should require approval when a policy demands it', async () => {
+      policyEngine.evaluate.mockResolvedValueOnce({
+        matched: true,
+        policy_id: 'policy-hitl',
+        action: 'require_approval',
+        reason: 'Policy "HITL off-hours" matched',
+      });
+      const result = await service.checkPermission('valid-token', 'database', 'users/123', 'read');
+      expect(result.allowed).toBe(true);
+      expect(result.requires_approval).toBe(true);
+      expect(result.matched_policy_id).toBe('policy-hitl');
+    });
+
+    it('should return step_up_required when a policy demands step-up auth', async () => {
+      policyEngine.evaluate.mockResolvedValueOnce({
+        matched: true,
+        policy_id: 'policy-stepup',
+        action: 'step_up',
+        reason: 'Policy "Step-up deletes" matched',
+      });
+      const result = await service.checkPermission('valid-token', 'database', 'users/123', 'read');
+      expect(result.allowed).toBe(false);
+      expect(result.reason).toBe('step_up_required');
+      expect(grantRepo.increment).not.toHaveBeenCalled();
+    });
+
+    it('should not require approval when no policy matches (autonomous)', async () => {
+      const result = await service.checkPermission('valid-token', 'database', 'users/123', 'read');
+      expect(result.allowed).toBe(true);
+      expect(result.requires_approval).toBe(false);
     });
   });
 

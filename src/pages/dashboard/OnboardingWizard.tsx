@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useDashboard } from "@/context/DashboardContext";
+import { generateAgentPublicKeyPem, mockPublicKey } from "@/lib/crypto";
 import { Shield, Key, CheckCircle2, Rocket, ArrowRight, ArrowLeft, Copy, Check } from "lucide-react";
 
 const steps = [
@@ -27,9 +28,17 @@ export default function OnboardingWizard({ onComplete }: { onComplete: () => voi
   const [approvalMode, setApprovalMode] = useState<"autonomous" | "human-in-the-loop">("human-in-the-loop");
   const [copied, setCopied] = useState(false);
 
-  const handleCreateAgent = () => {
-    const id = "ag_" + Date.now().toString(36); setAgentId(id);
-    addAgent({ id, name: agentName || "My First Agent", status: "active", approvalMode, publicKey: "ed25519_pk_" + Math.random().toString(36).slice(2, 14), fingerprint: "SHA256:" + Math.random().toString(36).slice(2, 10), trustLevel: "normal", trustScore: 75, createdAt: new Date().toISOString(), lastActiveAt: new Date().toISOString(), tokensIssued: 0, actionsTotal: 0, actionsAllowed: 0, actionsDenied: 0, tier: "free", tags: ["onboarding"] });
+  const handleCreateAgent = async () => {
+    const id = "ag_" + Date.now().toString(36);
+    // Real PEM key in API mode (the backend verifies challenge signatures
+    // against it); placeholder in mock mode.
+    const dataSource = (window as any).__AGENTAUTH_DATA_SOURCE__ ?? "mock";
+    const publicKey =
+      dataSource === "api" ? await generateAgentPublicKeyPem() : mockPublicKey();
+    // addAgent resolves to the canonical id: the backend-assigned UUID in
+    // API mode, the local id in mock mode. The grant step must use it.
+    const resolvedId = await addAgent({ id, name: agentName || "My First Agent", status: "active", approvalMode, publicKey, fingerprint: "SHA256:" + Math.random().toString(36).slice(2, 10), trustLevel: "normal", trustScore: 75, createdAt: new Date().toISOString(), lastActiveAt: new Date().toISOString(), tokensIssued: 0, actionsTotal: 0, actionsAllowed: 0, actionsDenied: 0, tier: "free", tags: ["onboarding"] });
+    setAgentId(resolvedId);
     setStep(1);
   };
 

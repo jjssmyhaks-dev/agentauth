@@ -41,7 +41,7 @@ const navItems = [
 
 export default function DashboardLayout() {
   const { user, signOut } = useAuth();
-  const { pendingApprovals } = useDashboard();
+  const { pendingApprovals, dataSource } = useDashboard();
   const { unreadCount } = useNotifications();
   const { theme, setTheme } = useTheme();
   const location = useLocation();
@@ -56,8 +56,9 @@ export default function DashboardLayout() {
   const [notifPanelOpen, setNotifPanelOpen] = useState(false);
   const bellRef = useRef<HTMLButtonElement>(null);
 
-  useNotificationSimulator(15000);
-  useRealtime();
+  // Simulation only runs in mock/demo mode — never on top of real API data.
+  useNotificationSimulator(dataSource === "mock" ? 15000 : 0);
+  useRealtime(dataSource === "mock" ? 8000 : 0);
 
   const handleOnboardingComplete = () => {
     localStorage.setItem("aa_onboarding_complete", "true");

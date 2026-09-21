@@ -32,7 +32,7 @@ export class AgentAuthClient {
   private currentToken: string | null = null;
   private tokenExpiresAt: Date | null = null;
 
-  constructor(agentId: string, privateKey: string, apiUrl: string = 'http://localhost:3000') {
+  constructor(agentId: string, privateKey: string, apiUrl: string = 'http://localhost:4000') {
     this.agentId = agentId;
     this.privateKey = privateKey;
     this.apiUrl = apiUrl;

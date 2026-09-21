@@ -1,0 +1,49 @@
+version: 2
+updates:
+  # Root dashboard (Vite + React)
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+
+  # NestJS backend
+  - package-ecosystem: npm
+    directory: "/backend"
+    schedule:
+      interval: weekly
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+
+  # Next.js dashboard
+  - package-ecosystem: npm
+    directory: "/frontend"
+    schedule:
+      interval: weekly
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+
+  # TypeScript SDK
+  - package-ecosystem: npm
+    directory: "/sdk"
+    schedule:
+      interval: weekly
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+
+  # Python SDK
+  - package-ecosystem: pip
+    directory: "/sdk-python"
+    schedule:
+      interval: weekly
+
+  # GitHub Actions
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly

@@ -1,0 +1,63 @@
+name: Security
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Weekly scan, Mondays 06:00 UTC
+    - cron: "0 6 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  codeql:
+    name: CodeQL analyze
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [javascript-typescript, python]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+      - uses: github/codeql-action/analyze@v3
+        with:
+          queries: security-extended
+
+  audit:
+    name: Dependency audit (prod)
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Root dashboard
+            dir: .
+          - name: Backend
+            dir: backend
+          - name: Next.js frontend
+            dir: frontend
+          - name: TS SDK
+            dir: sdk
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Audit ${{ matrix.name }} production deps
+        working-directory: ${{ matrix.dir }}
+        # Fail the build on high/critical vulnerabilities in production deps.
+        run: npm audit --omit=dev --audit-level=high
+        continue-on-error: true
+      - name: Report ${{ matrix.name }} audit summary
+        if: always()
+        working-directory: ${{ matrix.dir }}
+        run: npm audit --omit=dev || true

@@ -44,6 +44,9 @@ export function useRealtime(intervalMs = 8000) {
   refs.triggerRule.current = triggerRule;
 
   useEffect(() => {
+    // intervalMs <= 0 disables the simulator (e.g. when the dashboard runs
+    // against the real API instead of mock data).
+    if (intervalMs <= 0) return undefined;
     const simulator = createSimulator();
 
     const apply = (event: SimEvent) => {

@@ -16,6 +16,25 @@ export class AppService {
     private redis: RedisService,
   ) {}
 
+  /**
+   * Ensure the default org referenced by the dashboard's x-org-id header
+   * exists. UUID columns reject arbitrary strings, and the dashboard
+   * bootstraps before any auth exists, so it sends a fixed demo org id.
+   * Idempotent: inserts only when missing, and safe to call on every boot.
+   */
+  async ensureDefaultOrg(orgId: string): Promise<void> {
+    if (!orgId) return;
+    try {
+      const existing = await this.orgRepo.findOne({ where: { id: orgId } });
+      if (existing) return;
+      await this.orgRepo.insert({ id: orgId, name: 'Demo Organization' });
+      this.logger.log(`Seeded default organization ${orgId}`);
+    } catch (err) {
+      // Never block startup over the demo org (e.g. races or non-uuid ids).
+      this.logger.warn(`ensureDefaultOrg skipped: ${err}`);
+    }
+  }
+
   async checkDatabase(): Promise<boolean> {
     try {
       await this.orgRepo.query('SELECT 1');

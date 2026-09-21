@@ -7,7 +7,8 @@ on:
     branches: [main]
 
 jobs:
-  verify:
+  dashboard:
+    name: Dashboard (root Vite app)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -23,8 +24,110 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
-      - name: Tests
+      - name: Unit tests
         run: npm test
 
       - name: Build
         run: npm run build
+
+  backend:
+    name: Backend (NestJS API)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci --prefix backend --no-audit --no-fund
+
+      - name: Build
+        run: npm run build --prefix backend
+
+      - name: Unit tests
+        run: npm test --prefix backend -- --silent
+
+  frontend:
+    name: Dashboard (Next.js app)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci --prefix frontend --no-audit --no-fund
+
+      - name: Typecheck
+        run: npm --prefix frontend exec -- tsc --noEmit
+
+      - name: Build
+        run: npm run build --prefix frontend
+
+  e2e:
+    name: E2E (golden path)
+    runs-on: ubuntu-latest
+    needs: [dashboard, backend]
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: agentauth
+          POSTGRES_PASSWORD: agentauth
+          POSTGRES_DB: agentauth
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U agentauth"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install root dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Install backend dependencies
+        run: npm ci --prefix backend --no-audit --no-fund
+
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Run golden path E2E
+        env:
+          E2E_DATABASE_URL: postgres://agentauth:agentauth@localhost:5432/agentauth
+          E2E_REDIS_URL: redis://localhost:6379
+        run: npx playwright test
+
+      - name: Upload Playwright artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7

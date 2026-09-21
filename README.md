@@ -1,209 +1,114 @@
 # AgentAuth
 
-**Identity, permissions, and audit platform purpose-built for AI agents.**
+**Identity, permissions, and audit for AI agents.**
 
-> Auth built for agents, not humans.
+AgentAuth gives autonomous agents verifiable identities, scoped permissions, and a tamper-evident audit trail — so humans stay in the loop where it matters.
 
-AgentAuth gives developers a complete identity layer for AI agents — cryptographic key-based authentication, granular grant/permission scoping, human-in-the-loop approvals, tamper-proof audit trails, and webhook delivery.
+```
+Agent signs a challenge with its private key → receives a short-lived RS256 JWT
+→ every action is checked against fine-grained grants → sensitive actions wait
+for human approval → everything lands in a hash-chained audit log.
+```
 
----
+## Repository layout
 
-## Quick Start
+| Path | What it is |
+|---|---|
+| `src/` | **Dashboard** (Vite + React 19). Runs on rich mock data by default; point it at the backend with `VITE_API_URL` to go live (see [Running the dashboard against the API](#running-the-dashboard-against-the-api)). |
+| `backend/` | **NestJS API** — the real engine: agent identity, RSA challenge-response token issuance, grants, approvals, hash-chained audit log, Redis nonces, rate limiting, OpenAPI docs at `/docs`. |
+| `frontend/` | Next.js 16 dashboard (Supabase auth) — an alternative front end wired to the API. |
+| `sdk/` | TypeScript SDK (`agentauth-sdk`). |
+| `sdk-python/` | Python SDK (`agentauth`). |
+| `e2e/` | Playwright end-to-end suite for the golden path. |
+| `docs/` | Product docs and release notes. |
 
-### Prerequisites
+## Quickstart (full stack, ~5 minutes)
 
-- Bun (recommended) or Node.js 18+
-- npm or bun
-
-### 1. Install
+Prereqs: Docker, Node 22, npm.
 
 ```bash
-git clone https://github.com/jjssmyhaks-dev/agentauth.git
-cd agentauth
-bun install
+# 1. Postgres + Redis
+docker compose up -d db redis
+
+# 2. Backend (reads env from backend/.env — see backend/.env.example)
+cd backend && cp .env.example .env && npm ci && npm run start:dev
+# → API on http://localhost:4000  ·  Swagger at http://localhost:4000/docs
+
+# 3. Dashboard against the real API (new terminal)
+cd .. && npm ci
+VITE_API_URL=http://localhost:4000 npm run dev
+# → Dashboard on http://localhost:5173, showing live API data
 ```
 
-### 2. Development
+Without `VITE_API_URL` the dashboard runs in self-contained demo mode (mock data + realtime simulation) — same UI, no infrastructure.
 
-```bash
-bun run dev
-```
+## Running the dashboard against the API
 
-Open [http://localhost:5173](http://localhost:5173)
+| Variable | Purpose |
+|---|---|
+| `VITE_API_URL` | Backend base URL, e.g. `http://localhost:4000`. When set **and** the backend answers `/health`, the dashboard runs in API mode: every mutation is sent to the API and state is refetched from it. Falls back to mock mode if the API is unreachable. |
+| `VITE_ORG_ID` | Org scoping header (`x-org-id`). Defaults to a fixed UUID that the backend auto-seeds on first health check. |
 
-### 3. Production Build
+Backend env contract: see `backend/.env.example` (database, Redis, JWT keys, CORS, Sentry, Knock). Note `JWT_PRIVATE_KEY`/`JWT_PUBLIC_KEY` — without them the backend generates an **ephemeral** RS256 keypair per boot, invalidating issued tokens across restarts.
 
-```bash
-bun run build
-bun run preview
-```
+## Development
 
----
+All work happens on npm (no Bun required).
 
-## Architecture
+| Where | Command | What |
+|---|---|---|
+| root | `npm run dev` | Dashboard dev server (Vite) |
+| root | `npm run typecheck` / `npm test` / `npm run build` | Typecheck · 27 unit tests · production build |
+| root | `npm run test:e2e` | Playwright golden path (starts backend + dashboard; needs `docker compose up -d db redis` first) |
+| backend | `npm run start:dev` / `npm test` / `npm run build` | API dev server · unit tests · build |
+| frontend | `npm run dev` / `npm run build` | Next.js dashboard |
 
-```
-┌──────────────────────────────────────────────────────────┐
-│  Frontend — Vite 8 + React 19 + Tailwind CSS 4          │
-│  / (landing) · /auth (login) · /dashboard/*              │
-│  Framer Motion animations · Lazy-loaded routes           │
-├──────────────────────────────────────────────────────────┤
-│  Dashboard Pages                                         │
-│  Overview · Agents · Grants · Approvals · Activity       │
-│  Analytics · Webhooks · API Keys · Settings · Docs       │
-│  Notifications · Agent Detail · Onboarding Wizard        │
-├──────────────────────────────────────────────────────────┤
-│  UI Components                                           │
-│  shadcn/ui (Radix primitives) · Lucide icons             │
-│  Framer Motion · TanStack Table                          │
-├──────────────────────────────────────────────────────────┤
-│  State Management                                        │
-│  AuthContext · DashboardContext · NotificationContext     │
-│  Real-time simulation (useNotificationSimulator)         │
-└──────────────────────────────────────────────────────────┘
-```
+CI (`.github/workflows/ci.yml`) runs typecheck, unit tests, and builds for dashboard, backend, and frontend, plus the Playwright E2E with Postgres/Redis service containers on every push and PR to `main`.
 
----
+## API surface (v1)
 
-## Tech Stack
-
-| Layer | Technology |
-|-------|------------|
-| Build | Vite 8 (Rolldown) |
-| Framework | React 19 |
-| Routing | React Router v7 |
-| Styling | Tailwind CSS 4 |
-| Animations | Framer Motion |
-| Components | shadcn/ui (Radix UI primitives) |
-| Tables | TanStack React Table |
-| Icons | Lucide React |
-| Language | TypeScript 7 |
-
----
-
-## Features
-
-### Landing Page
-- Animated auth flow diagram with traveling dots
-- Scroll-triggered section reveals
-- FAQ accordion with smooth animations
-- Pricing cards with hover effects
-- Mobile-responsive navigation
-
-### Dashboard
-- **Overview** — Live stats, pending approvals, activity feed
-- **Agents** — Registry with create, revoke, trust scores
-- **Agent Detail** — Per-agent view with sessions, keys, permissions, activity
-- **Grants** — Create and manage scoped permission grants
-- **Approvals** — Human-in-the-loop queue (approve/deny)
-- **Activity** — Hash-chained audit log with filters and export
-- **Analytics** — Token usage, action success rates, performance metrics
-- **Webhooks** — Register, test, pause webhook endpoints
-- **API Keys** — Generate and manage dashboard API keys
-- **Notifications** — Real-time notification center with type filters
-- **Settings** — Organization configuration
-- **Docs** — SDK documentation and API reference
-
-### Auth Flow
-- Email/password sign-in and sign-up
-- Session persistence via localStorage
-- Protected dashboard routes with redirect
-- Animated auth page with loading states
-
-### Real-Time
-- Simulated agent activity every 15 seconds
-- Toast notifications for urgent events
-- Live activity feed with animated entry/exit
-- Notification system with priority levels (urgent/high/medium/low)
-
----
-
-## Project Structure
+All routes are prefixed `/api`. Highlights:
 
 ```
-agentauth/
-├── src/
-│   ├── components/
-│   │   ├── ui/              # shadcn/ui components
-│   │   ├── NotificationPanel.tsx
-│   │   └── ToastContainer.tsx
-│   ├── context/
-│   │   ├── AuthContext.tsx
-│   │   ├── DashboardContext.tsx
-│   │   └── NotificationContext.tsx
-│   ├── data/
-│   │   └── mock.ts          # Mock data for all dashboard entities
-│   ├── hooks/
-│   │   └── useNotificationSimulator.ts
-│   ├── lib/
-│   │   └── utils.ts         # cn() utility
-│   ├── pages/
-│   │   ├── LandingPage.tsx
-│   │   ├── AuthPage.tsx
-│   │   └── dashboard/
-│   │       ├── Layout.tsx
-│   │       ├── OverviewPage.tsx
-│   │       ├── AgentsPage.tsx
-│   │       ├── AgentDetailPage.tsx
-│   │       ├── GrantsPage.tsx
-│   │       ├── ApprovalsPage.tsx
-│   │       ├── ActivityPage.tsx
-│   │       ├── AnalyticsPage.tsx
-│   │       ├── WebhooksPage.tsx
-│   │       ├── ApiKeysPage.tsx
-│   │       ├── SettingsPage.tsx
-│   │       ├── DocsPage.tsx
-│   │       ├── NotificationsPage.tsx
-│   │       └── OnboardingWizard.tsx
-│   ├── types/
-│   │   └── index.ts
-│   ├── App.tsx               # Route definitions with lazy loading
-│   ├── main.tsx              # React root with BrowserRouter
-│   └── index.css             # Theme tokens, Tailwind config, global styles
-├── backend/                  # API documentation (NestJS backend reference)
-├── sdk/                      # TypeScript SDK (agentauth-sdk)
-├── sdk-python/               # Python SDK (agentauth)
-├── public/
-│   └── favicon.svg
-├── index.html
-├── package.json
-├── vite.config.ts
-└── tsconfig.json
+POST /api/v1/agents                      register agent (org, name, PEM public key)
+GET  /api/v1/agents?org_id=…             list agents
+POST /api/v1/tokens/challenge?agent_id=… get a one-time nonce (60s TTL)
+POST /api/v1/tokens                      exchange nonce + RSA signature for JWT
+POST /api/v1/grants                      create scoped grant (pattern, actions, caps)
+POST /api/v1/permissions/check          authorize action; returns requires_approval
+POST /api/v1/approvals                   create pending approval (HITL flow)
+POST /api/v1/approvals/:id/decide        approve | deny
+GET  /api/v1/audit?org_id=…              query audit log
+GET  /api/v1/audit/verify-chain          verify hash chain integrity
+GET  /.well-known/jwks.json              JWKS for JWT verification
 ```
 
----
+Full interactive docs: run the backend and open `/docs` (Swagger).
 
-## Environment
+## SDKs
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `PORT` | No | Dev server port (default: 5173) |
+```ts
+// TypeScript
+import { AgentAuthClient } from "agentauth-sdk";
+const client = new AgentAuthClient(agentId, privateKeyPem, "http://localhost:4000");
+const token = await client.get_token();
+const ok = await client.checkPermission("database", "customers_table", "read");
+```
 
-No external services required for the frontend — all data is mock/simulated for development.
+```python
+# Python
+from agentauth import AgentAuthClient
+client = AgentAuthClient(agent_id, private_key_pem, api_url="http://localhost:4000")
+token = client.get_token()
+result = client.check_permission("database", "customers_table", "read")
+```
 
----
+The client keeps its **private key**; only the PEM **public key** is registered with AgentAuth. Challenges are signed with RSA-SHA256 (PKCS#1 v1.5) and verified server-side.
 
-## Scripts
+## Security
 
-| Command | Description |
-|---------|-------------|
-| `bun run dev` | Start dev server on 0.0.0.0:5173 |
-| `bun run build` | Production build to dist/ |
-| `bun run preview` | Preview production build |
-| `bun run typecheck` | TypeScript type checking |
-
----
-
-## Build Optimizations
-
-- **Route-level code splitting** via React.lazy() — each page loads independently
-- **Production build** targets ES2020 with no sourcemaps
-- **Chunked output** — vendor, motion, UI libraries split into separate chunks
-- **Lazy-loaded pages** — Overview, Agents, Grants, etc. each get their own chunk
-- **CSS optimization** — Tailwind 4 with automatic purging
-
----
+See [SECURITY.md](SECURITY.md) for reporting vulnerabilities. Highlights of the model: one-time challenge nonces (Redis, 60s TTL), short-lived RS256 JWTs with JWKS rotation-ready key ids, hash-chained audit entries, per-org rate limiting, and org-scoped data access.
 
 ## License
 
-MIT
+[MIT](LICENSE)

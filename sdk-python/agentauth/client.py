@@ -1,10 +1,11 @@
 import time
-import hashlib
-import hmac
 import base64
-import json
 from typing import Optional, Dict, Any, Callable
+
 import requests
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import padding
+from cryptography.hazmat.backends import default_backend
 
 from .errors import (
     AgentAuthError,
@@ -22,7 +23,7 @@ class AgentAuthClient:
         self,
         agent_id: str,
         private_key: str,
-        api_url: str = "http://localhost:3000",
+        api_url: str = "http://localhost:4000",
     ):
         """
         Initialize the AgentAuth client.
@@ -39,14 +40,27 @@ class AgentAuthClient:
         self._token_expires_at: Optional[float] = None
 
     def _sign_challenge(self, challenge: str) -> str:
-        """Sign a challenge with the private key"""
-        # In production, this would use proper Ed25519 signing
-        # For now, use HMAC-SHA256 as a placeholder
-        signature = hmac.new(
-            self.private_key.encode(),
-            challenge.encode(),
-            hashlib.sha256,
-        ).digest()
+        """Sign a challenge with the agent's RSA private key.
+
+        The backend verifies with ``crypto.createVerify('SHA256')`` over the
+        raw nonce string (RSA PKCS#1 v1.5, SHA-256), returning the signature
+        base64-encoded. This must match that scheme exactly.
+        """
+        try:
+            private_key = serialization.load_pem_private_key(
+                self.private_key.encode(), password=None, backend=default_backend()
+            )
+        except ValueError as exc:
+            raise AgentAuthError(
+                "private_key must be a PEM-encoded RSA private key "
+                "matching the public key registered for this agent"
+            ) from exc
+
+        signature = private_key.sign(
+            challenge.encode("utf-8"),
+            padding.PKCS1v15(),
+            hashes.SHA256(),
+        )
         return base64.b64encode(signature).decode()
 
     def get_token(self) -> str:

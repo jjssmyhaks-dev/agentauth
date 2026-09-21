@@ -41,3 +41,7 @@ coverage/
 # Freebuff desktop app local state (keep the committed run doc)
 .freebuff/*
 !.freebuff/run.md
+
+# Python artifacts
+__pycache__/
+*.pyc

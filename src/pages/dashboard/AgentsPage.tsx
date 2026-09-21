@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useDashboard } from "@/context/DashboardContext";
+import { generateAgentPublicKeyPem, mockPublicKey } from "@/lib/crypto";
 import { useNotifications } from "@/context/NotificationContext";
 import { Plus, Search, Shield, Key, Trash2, RotateCcw } from "lucide-react";
 import { motion } from "framer-motion";
@@ -97,12 +98,14 @@ export default function AgentsPage() {
     },
   ];
 
-  const handleCreate = useCallback(() => {
+  const handleCreate = useCallback(async () => {
     if (!newName.trim()) return;
     const id = "ag_" + Date.now().toString(36);
     addAgent({
       id, name: newName.trim(), status: "active", approvalMode: newMode,
-      publicKey: "ed25519_pk_" + Math.random().toString(36).slice(2, 14),
+      publicKey: (window as any).__AGENTAUTH_DATA_SOURCE__ === "api"
+        ? await generateAgentPublicKeyPem()
+        : mockPublicKey(),
       fingerprint: "SHA256:" + Math.random().toString(36).slice(2, 10),
       trustLevel: "normal", trustScore: 75, createdAt: new Date().toISOString(),
       lastActiveAt: new Date().toISOString(), tokensIssued: 0, actionsTotal: 0,

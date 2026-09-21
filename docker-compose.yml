@@ -1,0 +1,68 @@
+# AgentAuth local stack: Postgres + Redis + API + dashboard.
+#   docker compose up --build
+#   dashboard  → http://localhost:5173   (VITE_API_URL=http://localhost:4000 preset)
+#   API docs   → http://localhost:4000/docs
+# API keys are seeded — see POSTGRES env below / backend/README.
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: agentauth
+      POSTGRES_PASSWORD: agentauth
+      POSTGRES_DB: agentauth
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U agentauth"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    # Run only the API stage of the multi-stage Dockerfile.
+    command: ["node", "backend/dist/main.js"]
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgres://agentauth:agentauth@db:5432/agentauth
+      REDIS_URL: redis://redis:6379
+      PORT: 4000
+      CORS_ORIGIN: http://localhost:5173
+      TOKEN_TTL_MINUTES: 10
+    ports:
+      - "4000:4000"
+
+  dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    # Run only the dashboard (root Vite app) stage.
+    command: ["sh", "-c", "npx serve -l 5173 dist"]
+    depends_on:
+      - api
+    environment:
+      VITE_API_URL: http://localhost:4000
+    ports:
+      - "5173:5173"
+
+volumes:
+  pgdata:

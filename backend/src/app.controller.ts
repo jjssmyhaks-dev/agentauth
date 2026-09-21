@@ -21,6 +21,9 @@ export class AppController {
   @ApiOperation({ summary: 'Health check endpoint' })
   async health() {
     const dbOk = await this.appService.checkDatabase();
+    // Make sure the org the dashboard bootstraps with exists (no-op when it
+    // already does, and never fails the health check if seeding fails).
+    await this.appService.ensureDefaultOrg(process.env.DEFAULT_ORG_ID || '00000000-0000-4000-8000-000000000001');
     return {
       status: dbOk ? 'healthy' : 'degraded',
       timestamp: new Date().toISOString(),

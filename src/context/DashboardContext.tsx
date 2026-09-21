@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback, useMemo, type ReactNode } from "react";
+import { createContext, useContext, useState, useCallback, useMemo, useEffect, type ReactNode } from "react";
 import type { Agent, Grant, Approval, AuditEntry, ApiKey, Webhook, AgentStats } from "@/types";
 import {
   mockAgents,
@@ -9,8 +9,12 @@ import {
   mockWebhooks,
   mockAgentStats,
 } from "@/data/mock";
+import { resolveDataSource } from "@/lib/dataSource";
+import { ApiError, type ApiClient } from "@/lib/api/client";
 
 interface DashboardContextType {
+  /** Whether the dashboard is backed by the real API (false = mock/demo). */
+  dataSource: "api" | "mock" | "resolving";
   agents: Agent[];
   grants: Grant[];
   approvals: Approval[];
@@ -21,7 +25,8 @@ interface DashboardContextType {
   pendingApprovals: number;
   totalTokens: number;
   totalActions: number;
-  addAgent: (agent: Agent) => void;
+  /** Returns the agent id to use downstream (API id in API mode, local id in mock mode). */
+  addAgent: (agent: Agent) => Promise<string>;
   updateAgent: (id: string, updates: Partial<Agent>) => void;
   addGrant: (grant: Grant) => void;
   addApproval: (approval: Approval) => void;
@@ -42,6 +47,8 @@ interface DashboardContextType {
 const DashboardContext = createContext<DashboardContextType | null>(null);
 
 export function DashboardProvider({ children }: { children: ReactNode }) {
+  const [dataSource, setDataSource] = useState<"api" | "mock" | "resolving">("resolving");
+
   const [agents, setAgents] = useState<Agent[]>(mockAgents);
   const [grants, setGrants] = useState<Grant[]>(mockGrants);
   const [approvals, setApprovals] = useState<Approval[]>(mockApprovals);
@@ -54,62 +61,203 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
   const totalTokens = useMemo(() => agents.reduce((s, a) => s + a.tokensIssued, 0), [agents]);
   const totalActions = useMemo(() => agents.reduce((s, a) => s + a.actionsTotal, 0), [agents]);
 
-  const addAgent = useCallback((agent: Agent) => {
-    setAgents((prev) => [agent, ...prev]);
+  // ── API-mode refetch (replaces the mock seed with real data) ─────────
+  const refetchAll = useCallback(async (client: NonNullable<Awaited<ReturnType<typeof resolveDataSource>>["client"]>) => {
+    const [fetchedAgents, fetchedGrants, fetchedApprovals, fetchedAudit, fetchedKeys] = await Promise.all([
+      client.listAgents(),
+      client.listGrants(),
+      client.listApprovals(),
+      client.listAudit(),
+      client.listApiKeys(),
+    ]);
+    // Authoritative: an empty API list means an empty dashboard — showing
+    // mock rows next to real API writes would be actively misleading.
+    setAgents(fetchedAgents);
+    setGrants(fetchedGrants);
+    setApprovals(fetchedApprovals);
+    setAuditLog(fetchedAudit);
+    setApiKeys(fetchedKeys);
   }, []);
 
-  const updateAgent = useCallback((id: string, updates: Partial<Agent>) => {
-    setAgents((prev) => prev.map((a) => (a.id === id ? { ...a, ...updates } : a)));
-  }, []);
+  useEffect(() => {
+    let cancelled = false;
+    resolveDataSource()
+      .then(async ({ mode, client }) => {
+        if (cancelled) return;
+        setDataSource(mode);
+        if (mode === "api" && client) await refetchAll(client);
+      })
+      .catch(() => {
+        if (!cancelled) setDataSource("mock");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [refetchAll]);
 
-  const addGrant = useCallback((grant: Grant) => {
-    setGrants((prev) => [grant, ...prev]);
-  }, []);
+  /** Run the mock mutation, then mirror it to the API (fire-and-forget). */
+  const withApi = useCallback(
+    (mockMutation: () => void, apiCall: (client: ApiClient) => Promise<unknown>) => {
+      mockMutation();
+      if (dataSource !== "api") return;
+      void (async () => {
+        const { client } = await resolveDataSource();
+        if (!client) return;
+        try {
+          await apiCall(client);
+        } catch (err) {
+          if (err instanceof ApiError) {
+            // eslint-disable-next-line no-console
+            console.error(`[agentauth] API write failed (${err.status}): ${err.message}`);
+          } else {
+            // eslint-disable-next-line no-console
+            console.error("[agentauth] API write failed:", err);
+          }
+        }
+      })();
+    },
+    [dataSource, refetchAll],
+  );
 
-  const approveRequest = useCallback((id: string) => {
-    setApprovals((prev) =>
-      prev.map((a) =>
-        a.id === id
-          ? { ...a, status: "approved" as const, decidedAt: new Date().toISOString(), decidedBy: "admin@acme.com" }
-          : a
-      )
-    );
-  }, []);
+  const addAgent = useCallback(
+    async (agent: Agent): Promise<string> => {
+      setAgents((prev) => [agent, ...prev]);
+      if (dataSource !== "api") return agent.id;
+      const { client } = await resolveDataSource();
+      if (!client) return agent.id;
+      try {
+        // The backend assigns the identity — downstream steps (grants) must
+        // use it, not the locally generated placeholder id.
+        const apiId = await client.createAgent(agent.name, agent.publicKey);
+        await refetchAll(client);
+        return apiId;
+      } catch (err) {
+        if (err instanceof ApiError) {
+          // eslint-disable-next-line no-console
+          console.error(`[agentauth] API write failed (${err.status}): ${err.message}`);
+        } else {
+          // eslint-disable-next-line no-console
+          console.error("[agentauth] API write failed:", err);
+        }
+        return agent.id;
+      }
+    },
+    [dataSource, refetchAll],
+  );
 
-  const denyRequest = useCallback((id: string, reason: string) => {
-    setApprovals((prev) =>
-      prev.map((a) =>
-        a.id === id
-          ? { ...a, status: "denied" as const, decidedAt: new Date().toISOString(), decidedBy: "admin@acme.com", denialReason: reason }
-          : a
-      )
-    );
-  }, []);
+  const updateAgent = useCallback(
+    (id: string, updates: Partial<Agent>) => {
+      withApi(
+        () => setAgents((prev) => prev.map((a) => (a.id === id ? { ...a, ...updates } : a))),
+        () => Promise.resolve(), // status/mode changes flow through dedicated endpoints later
+      );
+    },
+    [withApi],
+  );
 
-  const revokeAgent = useCallback((id: string) => {
-    setAgents((prev) =>
-      prev.map((a) => (a.id === id ? { ...a, status: "revoked" as const } : a))
-    );
-  }, []);
+  const addGrant = useCallback(
+    (grant: Grant) => {
+      withApi(
+        () => setGrants((prev) => [grant, ...prev]),
+        async (client) => {
+          await client.createGrant({
+            agentId: grant.agentId,
+            resourceType: grant.resourceType,
+            resourcePattern: grant.resourcePattern,
+            actions: grant.actions as unknown as string[],
+          });
+          await refetchAll(client);
+        },
+      );
+    },
+    [withApi, refetchAll],
+  );
+
+  const approveRequest = useCallback(
+    (id: string) => {
+      withApi(
+        () =>
+          setApprovals((prev) =>
+            prev.map((a) =>
+              a.id === id
+                ? { ...a, status: "approved" as const, decidedAt: new Date().toISOString(), decidedBy: "admin@acme.com" }
+                : a
+            ),
+          ),
+        async (client) => {
+          await client.decideApproval(id, "approved");
+          await refetchAll(client);
+        },
+      );
+    },
+    [withApi, refetchAll],
+  );
+
+  const denyRequest = useCallback(
+    (id: string, reason: string) => {
+      withApi(
+        () =>
+          setApprovals((prev) =>
+            prev.map((a) =>
+              a.id === id
+                ? { ...a, status: "denied" as const, decidedAt: new Date().toISOString(), decidedBy: "admin@acme.com", denialReason: reason }
+                : a
+            ),
+          ),
+        async (client) => {
+          await client.decideApproval(id, "denied", reason);
+          await refetchAll(client);
+        },
+      );
+    },
+    [withApi, refetchAll],
+  );
+
+  const revokeAgent = useCallback(
+    (id: string) => {
+      withApi(
+        () => setAgents((prev) => prev.map((a) => (a.id === id ? { ...a, status: "revoked" as const } : a))),
+        async (client) => {
+          await client.revokeAgent(id);
+          await refetchAll(client);
+        },
+      );
+    },
+    [withApi, refetchAll],
+  );
 
   const revokeAllAgents = useCallback(() => {
     setAgents((prev) => prev.map((a) => ({ ...a, status: "revoked" as const })));
   }, []);
 
-  const revokeGrant = useCallback((id: string) => {
-    setGrants((prev) =>
-      prev.map((g) => (g.id === id ? { ...g, status: "revoked" as const } : g))
-    );
-  }, []);
+  const revokeGrant = useCallback(
+    (id: string) => {
+      withApi(
+        () => setGrants((prev) => prev.map((g) => (g.id === id ? { ...g, status: "revoked" as const } : g))),
+        async (client) => {
+          await client.revokeGrant(id);
+          await refetchAll(client);
+        },
+      );
+    },
+    [withApi, refetchAll],
+  );
 
-  const addApiKey = useCallback((key: ApiKey) => {
-    setApiKeys((prev) => [key, ...prev]);
-  }, []);
+  const addApiKey = useCallback(
+    (key: ApiKey) => {
+      withApi(
+        () => setApiKeys((prev) => [key, ...prev]),
+        async (client) => {
+          await client.createApiKey(key.name);
+          await refetchAll(client);
+        },
+      );
+    },
+    [withApi, refetchAll],
+  );
 
   const revokeApiKey = useCallback((id: string) => {
-    setApiKeys((prev) =>
-      prev.map((k) => (k.id === id ? { ...k, status: "revoked" as const } : k))
-    );
+    setApiKeys((prev) => prev.map((k) => (k.id === id ? { ...k, status: "revoked" as const } : k)));
   }, []);
 
   const addWebhook = useCallback((wh: Webhook) => {
@@ -119,10 +267,8 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
   const pauseWebhook = useCallback((id: string) => {
     setWebhooks((prev) =>
       prev.map((w) =>
-        w.id === id
-          ? { ...w, status: w.status === "paused" ? ("active" as const) : ("paused" as const) }
-          : w
-      )
+        w.id === id ? { ...w, status: w.status === "paused" ? ("active" as const) : ("paused" as const) } : w
+      ),
     );
   }, []);
 
@@ -136,7 +282,7 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
 
   const incrementAgentTokens = useCallback((agentId: string, delta = 1) => {
     setAgents((prev) =>
-      prev.map((a) => (a.id === agentId ? { ...a, tokensIssued: a.tokensIssued + delta, lastActiveAt: new Date().toISOString() } : a))
+      prev.map((a) => (a.id === agentId ? { ...a, tokensIssued: a.tokensIssued + delta, lastActiveAt: new Date().toISOString() } : a)),
     );
   }, []);
 
@@ -148,13 +294,14 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
         actionsAllowed: a.actionsAllowed + (allowed ? 1 : 0),
         actionsDenied: a.actionsDenied + (allowed ? 0 : 1),
         lastActiveAt: new Date().toISOString(),
-      } : a))
+      } : a)),
     );
   }, []);
 
   return (
     <DashboardContext.Provider
       value={{
+        dataSource,
         agents, grants, approvals, auditLog, apiKeys, webhooks, agentStats,
         pendingApprovals, totalTokens, totalActions,
         addAgent, updateAgent, addGrant, addApproval, approveRequest, denyRequest, revokeAgent, revokeAllAgents, revokeGrant,

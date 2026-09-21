@@ -90,6 +90,8 @@ export function useNotificationSimulator(intervalMs = 15000) {
   const idx = useRef(0);
 
   useEffect(() => {
+    // intervalMs <= 0 disables the simulator (e.g. real-API mode).
+    if (intervalMs <= 0) return undefined;
     // Emit one immediately after 3s
     const initial = setTimeout(() => {
       const evt = simulatedEvents[0];

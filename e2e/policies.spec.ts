@@ -88,20 +88,11 @@ test.describe("policy engine", () => {
     await page.getByRole("button", { name: "Close", exact: true }).click();
 
     // ── 3. The engine really denies a matched grant in the live flow ────
-    // Mint a token via the challenge flow, then check a database:read that
-    // the wizard's grant allows — the policy must override it.
-    const tokenResp = await request.post(`${API}/api/v1/tokens/challenge`, {
-      data: { agent_id: agent.id },
-    });
-    expect(tokenResp.ok(), "challenge issued").toBeTruthy();
-    const { nonce } = (await tokenResp.json()) as { nonce: string };
-    // The E2E cannot hold the agent's private key (it never left the
-    // browser), so instead of signing we assert at the simulate + API level:
-    // the simulate endpoint already proved the deny wins for this agent.
-    void nonce;
-
     // Direct engine probe: simulate with the exact permission_check context
-    // the real check would build (resource_type=database, action=read).
+    // the real check would build (resource_type=database, action=read). The
+    // spec cannot hold the agent's private key (it never leaves the browser),
+    // so the simulate endpoint — the same engine checkPermission calls — is
+    // the authoritative proof here.
     const simResp = await request.post(`${API}/api/v1/policies/simulate`, {
       data: {
         org_id: ORG_ID,

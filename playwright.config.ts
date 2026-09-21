@@ -29,7 +29,8 @@ export default defineConfig({
   webServer: [
     {
       command: "npm run start:dev --prefix backend",
-      url: `http://127.0.0.1:${API_PORT}/api/health`,
+      // Health lives OUTSIDE the /api global prefix (see backend/src/main.ts).
+      url: `http://127.0.0.1:${API_PORT}/health`,
       reuseExistingServer: !process.env.CI,
       timeout: 120_000,
       env: {

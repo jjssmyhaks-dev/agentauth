@@ -162,10 +162,27 @@ export class TreasuryClient {
     throw new AgentAuthError(`Approval for intent ${intentId} timed out`);
   }
 
-  /** DPoP-style proof: Ed25519 signature over the sha256 of the canonical body. */
+  /**
+   * DPoP-style proof: Ed25519 signature over sha256(canonical body), with the
+   * issuance time appended ("<base64sig>.<issued_at_ms>") so the backend can
+   * enforce a ±5-minute freshness window on top of server-side replay
+   * protection. canonicalize() must match the backend's proof-verification
+   * canonicalizeBody() exactly: recursive sorted keys (a top-level-only sort
+   * would drop nested keys and break every signature).
+   */
   private signProof(body: unknown): string {
-    const canonical = JSON.stringify(body, Object.keys((body ?? {}) as object).sort());
-    const hash = crypto.createHash('sha256').update(canonical).digest('hex');
-    return crypto.sign(null, Buffer.from(hash, 'hex'), crypto.createPrivateKey(this.requester.privateKey)).toString('base64');
+    const hash = crypto.createHash('sha256').update(canonicalize(body)).digest('hex');
+    const sig = crypto.sign(null, Buffer.from(hash, 'hex'), crypto.createPrivateKey(this.requester.privateKey)).toString('base64');
+    return `${sig}.${Date.now()}`;
   }
+}
+
+/** Recursive sorted-key JSON — byte-identical to the backend's canonicalJson. */
+function canonicalize(value: unknown): string {
+  if (Array.isArray(value)) return '[' + value.map(canonicalize).join(',') + ']';
+  if (typeof value === 'object' && value !== null) {
+    const keys = Object.keys(value as object).sort();
+    return '{' + keys.map((k) => JSON.stringify(k) + ':' + canonicalize((value as Record<string, unknown>)[k])).join(',') + '}';
+  }
+  return JSON.stringify(value);
 }

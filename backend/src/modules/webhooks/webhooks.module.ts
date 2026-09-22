@@ -9,6 +9,8 @@ import { WebhooksController } from './webhooks.controller';
   imports: [TypeOrmModule.forFeature([Webhook])],
   controllers: [WebhooksController],
   providers: [WebhooksService, WebhookEventsService],
-  exports: [WebhooksService, WebhookEventsService],
+  // Re-export the forFeature module so importers (TreasuryModule's outbox
+  // service resolves WebhookRepository for endpoint resolution) get the repo.
+  exports: [TypeOrmModule.forFeature([Webhook]), WebhooksService, WebhookEventsService],
 })
 export class WebhooksModule {}

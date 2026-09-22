@@ -29,6 +29,7 @@ import {
   TreasuryBudgetReservation, TreasuryApproval, TreasuryApprovalDecision,
   TreasuryAuthorization, TreasuryKillSwitch, TreasuryLedgerEntry,
   TreasuryRailConnection, TreasuryPaymentAccount,
+  TreasuryProofNonce, TreasuryWebhookOutbox,
 } from './database/entities';
 import { PoliciesModule } from './modules/policies/policies.module';
 import { TrustModule } from './modules/trust/trust.module';
@@ -68,6 +69,7 @@ import { TreasuryModule } from './modules/treasury/treasury.module';
   TreasuryBudgetReservation, TreasuryApproval, TreasuryApprovalDecision,
   TreasuryAuthorization, TreasuryKillSwitch, TreasuryLedgerEntry,
   TreasuryRailConnection, TreasuryPaymentAccount,
+  TreasuryProofNonce, TreasuryWebhookOutbox,
     ],
       ssl: process.env.DATABASE_URL?.includes('sslmode=require')
         ? { rejectUnauthorized: false }

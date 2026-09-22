@@ -7,6 +7,7 @@ import {
   TreasuryBudgetReservation,
   BudgetPeriodKind,
 } from './treasury-entities';
+import { TreasuryWebhookOutboxService } from './webhook-outbox.service';
 
 function periodWindow(kind: BudgetPeriodKind, now: Date): { start: Date; end: Date } {
   const start = new Date(now);
@@ -50,6 +51,7 @@ export class TreasuryBudgetsService {
     private periodRepo: Repository<TreasuryBudgetPeriod>,
     @InjectRepository(TreasuryBudgetReservation)
     private reservationRepo: Repository<TreasuryBudgetReservation>,
+    private outbox: TreasuryWebhookOutboxService,
   ) {}
 
   async createBudget(input: {
@@ -159,6 +161,11 @@ export class TreasuryBudgetsService {
         }
         periods.push((await em.getRepository(TreasuryBudgetPeriod).findOne({ where: { id: period.id } }))!);
 
+        // Threshold alerts (FR-TRE-5): 50/80/100% of the limit, once per
+        // threshold per period. Uses the outbox as the "already fired" record
+        // via a cause_id that names budget+period+threshold.
+        await this.thresholds(periods[periods.length - 1], input.org_id);
+
         const reservation = await em.getRepository(TreasuryBudgetReservation).save(
           em.getRepository(TreasuryBudgetReservation).create({
             org_id: input.org_id,
@@ -173,6 +180,35 @@ export class TreasuryBudgetsService {
       }
       return { reservations, periods };
     });
+  }
+
+  /** Check 50/80/100% thresholds on a fresh period row and emit once each. */
+  private async thresholds(period: TreasuryBudgetPeriod, orgId: string): Promise<void> {
+    try {
+      const utilBp =
+        (BigInt(period.reserved_minor) + BigInt(period.spent_minor)) * 100n /
+        (BigInt(period.limit_minor) || 1n);
+      for (const pct of [50, 80, 100] as const) {
+        if (utilBp >= pct) {
+          await this.outbox.enqueueOnce({
+            org_id: orgId,
+            event_type: 'budget.threshold_reached',
+            cause_id: `thr:${period.id}:${pct}`,
+            payload: {
+              budget_id: period.budget_id,
+              period_id: period.id,
+              threshold: pct,
+              limit_minor: period.limit_minor,
+              reserved_minor: period.reserved_minor,
+              spent_minor: period.spent_minor,
+            },
+          });
+        }
+      }
+    } catch (err: any) {
+      // Alerting must never break a reservation.
+      this.logger.warn(`budget threshold check failed (non-fatal): ${err?.message ?? err}`);
+    }
   }
 
   /** Held → captured (spend booked, reservation consumed). */

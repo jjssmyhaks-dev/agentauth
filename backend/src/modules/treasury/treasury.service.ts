@@ -24,7 +24,9 @@ import { TreasuryBudgetsService } from './budgets.service';
 import { TreasuryLedgerService } from './ledger.service';
 import { RailsService } from './rails/rails.service';
 import { ApprovalService } from '../approval/approval.service';
-import { Agent } from '../../database/entities';
+import { verifyProof } from './proof-verification';
+import { TreasuryWebhookOutboxService } from './webhook-outbox.service';
+import { Agent, TreasuryProofNonce, TreasuryWebhookOutbox } from '../../database/entities';
 
 const SPEND_TOKEN_TTL_SECONDS = 120; // binding: TTL ≤ 120 s (FR-ID-3)
 const EDDSA_KEY_TTL_GUARD = 5 * 60; // approval reservation window
@@ -78,10 +80,13 @@ export class TreasuryService {
     @InjectRepository(TreasuryApproval) private approvalRepo: Repository<TreasuryApproval>,
     @InjectRepository(TreasuryApprovalDecision) private approvalDecisionRepo: Repository<TreasuryApprovalDecision>,
     @InjectRepository(Agent) private agentRepo: Repository<Agent>,
+    @InjectRepository(TreasuryProofNonce) private proofNonceRepo: Repository<TreasuryProofNonce>,
+    @InjectRepository(TreasuryWebhookOutbox) private outboxRepo: Repository<TreasuryWebhookOutbox>,
     private budgets: TreasuryBudgetsService,
     private ledger: TreasuryLedgerService,
     private rails: RailsService,
     private approvalService: ApprovalService,
+    private outbox: TreasuryWebhookOutboxService,
   ) {
     if (process.env.TREASURY_SPEND_PRIVATE_KEY && process.env.TREASURY_SPEND_PUBLIC_KEY) {
       this.tokenPrivateKey = process.env.TREASURY_SPEND_PRIVATE_KEY;
@@ -320,7 +325,7 @@ export class TreasuryService {
   // ── Kill switch ──────────────────────────────────────────────────────────
 
   async engageKillSwitch(input: { org_id: string; scope_type: 'org' | 'agent' | 'rail'; scope_id?: string | null; engaged_by: string; reason?: string }): Promise<TreasuryKillSwitch> {
-    return this.killSwitchRepo.save(
+    const ks = await this.killSwitchRepo.save(
       this.killSwitchRepo.create({
         org_id: input.org_id,
         scope_type: input.scope_type,
@@ -330,13 +335,27 @@ export class TreasuryService {
         reason: input.reason ?? null,
       } as unknown as TreasuryMandate),
     );
+    await this.outbox.enqueue({
+      org_id: input.org_id,
+      event_type: 'killswitch.engaged',
+      payload: { kill_switch_id: ks.id, scope_type: input.scope_type, scope_id: input.scope_id ?? null, engaged_by: input.engaged_by, reason: input.reason ?? null },
+      cause_id: ks.id,
+    });
+    return ks;
   }
 
   async releaseKillSwitch(id: string, orgId: string): Promise<TreasuryKillSwitch> {
     const ks = await this.killSwitchRepo.findOne({ where: { id, org_id: orgId } });
     if (!ks) throw new NotFoundException(`Kill switch ${id} not found`);
     ks.released_at = new Date();
-    return this.killSwitchRepo.save(ks);
+    const saved = await this.killSwitchRepo.save(ks);
+    await this.outbox.enqueue({
+      org_id: orgId,
+      event_type: 'killswitch.released',
+      payload: { kill_switch_id: ks.id, scope_type: ks.scope_type, scope_id: ks.scope_id ?? null },
+      cause_id: ks.id,
+    });
+    return saved;
   }
 
   async listKillSwitches(orgId: string): Promise<TreasuryKillSwitch[]> {
@@ -455,6 +474,41 @@ export class TreasuryService {
     const correlationId = `pi:${intent.id}`;
 
     try {
+      // 0. DPoP-style proof (T2): verify the agent key's signature over the
+      // canonical request, reject stale/replayed proofs — before any policy,
+      // budget or credential work.
+      if (input.proof !== undefined) {
+        const agent = await this.agentRepo.findOne({ where: { id: input.agent_id } });
+        const proofCheck = await verifyProof({
+          body: { ...input, amount_minor: amountMinor, proof: null },
+          proof: input.proof,
+          agentPublicKeyPem: agent?.public_key ?? null,
+          wasNonceUsed: async (nonce) => {
+            const seen = await this.proofNonceRepo.findOne({ where: { nonce } });
+            return !!seen;
+          },
+        });
+        // (ok === false, not !ok: under strictNullChecks:false truthiness
+        // does not narrow discriminated unions, equality does.)
+        if (proofCheck.ok === false) {
+          return await this.finalizeDeny(
+            intent,
+            [{ code: `proof_${proofCheck.code}`, message: proofCheck.message }],
+            correlationId,
+            mandate?.id ?? null,
+            null,
+          );
+        }
+        await this.proofNonceRepo.save(
+          this.proofNonceRepo.create({
+            org_id: input.org_id,
+            agent_id: input.agent_id,
+            nonce: proofCheck.nonce,
+            proof_ts: proofCheck.proof_ts,
+          } as unknown as TreasuryProofNonce),
+        );
+      }
+
       // 1. Kill switch (org → agent → rail).
       if (await this.isKilled(input.org_id, input.agent_id, input.rail)) {
         return await this.finalizeDeny(intent, [{ code: 'kill_switch', message: 'Spend blocked by kill switch' }], correlationId, mandate?.id, null);
@@ -568,6 +622,23 @@ export class TreasuryService {
       matched_rule_id: decision.matched_rule_ids[0] ?? null,
       status: 'pending_approval',
     });
+        await this.outbox.enqueue({
+          org_id: input.org_id,
+          event_type: 'approval.required',
+          payload: {
+            intent_id: intent.id,
+            agent_id: input.agent_id,
+            approval_id: approval.id,
+            amount_minor: amountMinor,
+            asset: input.amount.asset,
+            counterparty: input.counterparty.identifier,
+            rail: input.rail,
+            purpose: input.purpose ?? null,
+            required: decision.approval ?? { roles: ['admin'], quorum: 1 },
+            expires_at: expiresAt.toISOString(),
+          },
+          cause_id: approval.id,
+        });
         await this.ledger.append({
           org_id: input.org_id,
           entry_type: 'decision',
@@ -657,6 +728,20 @@ export class TreasuryService {
       amount_minor: intent.amount_minor,
       asset_code: intent.asset_code,
       correlation_id: correlationId,
+    });
+    await this.outbox.enqueue({
+      org_id: intent.org_id,
+      event_type: 'payment.decided',
+      payload: {
+        intent_id: intent.id,
+        agent_id: intent.agent_id,
+        decision: 'deny',
+        status: 'denied',
+        reasons,
+        amount_minor: intent.amount_minor,
+        asset: intent.asset_code,
+      },
+      cause_id: intent.id,
     });
     return { intent_id: intent.id, decision: 'deny', status: 'denied', reasons };
   }
@@ -754,6 +839,21 @@ export class TreasuryService {
       credential = undefined;
     }
 
+    await this.outbox.enqueue({
+      org_id: intent.org_id,
+      event_type: 'payment.decided',
+      payload: {
+        intent_id: intent.id,
+        agent_id: intent.agent_id,
+        decision: decision.effect,
+        status: 'authorized',
+        reasons: decision.reasons,
+        amount_minor: maxAmount,
+        asset: intent.asset_code,
+      },
+      cause_id: intent.id,
+    });
+
     return {
       intent_id: intent.id,
       decision: decision.effect,
@@ -814,6 +914,19 @@ export class TreasuryService {
       rail_ref: evidence.rail_ref,
       correlation_id: `pi:${intentId}`,
     });
+    await this.outbox.enqueue({
+      org_id: orgId,
+      event_type: 'payment.settled',
+      payload: {
+        intent_id: intentId,
+        agent_id: intent.agent_id,
+        amount_minor: intent.amount_minor,
+        asset: intent.asset_code,
+        rail_ref: evidence.rail_ref,
+        rail: intent.rail,
+      },
+      cause_id: intentId,
+    });
     return { intent_id: intentId, decision: 'allow', status: 'settled', reasons: [{ message: 'Payment confirmed and captured' }] };
   }
 
@@ -833,6 +946,12 @@ export class TreasuryService {
       payment_intent_id: intentId,
       agent_id: intent.agent_id,
       correlation_id: `pi:${intentId}`,
+    });
+    await this.outbox.enqueue({
+      org_id: orgId,
+      event_type: 'payment.cancelled',
+      payload: { intent_id: intentId, agent_id: intent.agent_id, amount_minor: intent.amount_minor, asset: intent.asset_code },
+      cause_id: intentId,
     });
     return { intent_id: intentId, decision: 'deny', status: 'cancelled', reasons: [{ message: 'Intent cancelled; reservation released' }] };
   }
@@ -864,6 +983,27 @@ export class TreasuryService {
         }
         await this.budgets.release(a.payment_intent_id, orgId);
         expired++;
+        await this.outbox.enqueue({
+          org_id: orgId,
+          event_type: 'payment.cancelled',
+          payload: {
+            approval_id: a.id,
+            payment_intent_id: a.payment_intent_id,
+            reason: 'approval_expired',
+          },
+          cause_id: a.id,
+        });
+        if (intent && intent.status === 'expired') {
+          await this.outbox.enqueue({
+            org_id: orgId,
+            event_type: 'payment.cancelled',
+            payload: {
+              payment_intent_id: intent.id,
+              reason: 'intent_expired',
+            },
+            cause_id: `intent:${intent.id}`,
+          });
+        }
       }
     }
     return { released, approvals_expired: expired };
@@ -931,6 +1071,12 @@ export class TreasuryService {
         principal_ids: [input.principal_id],
         correlation_id: `pi:${intent.id}`,
       });
+      await this.outbox.enqueue({
+        org_id: orgId,
+        event_type: 'payment.decided',
+        payload: { intent_id: intent.id, agent_id: intent.agent_id, decision: 'deny', status: 'denied', reasons: [{ message: 'Denied by approver' }] },
+        cause_id: approval.id,
+      });
       return { intent_id: intent.id, decision: 'deny', status: 'denied', reasons: [{ message: 'Denied by approver' }] };
     }
 
@@ -945,6 +1091,12 @@ export class TreasuryService {
         agent_id: intent.agent_id,
         principal_ids: approvalsFor.map((d) => d.principal_id),
         correlation_id: `pi:${intent.id}`,
+      });
+      await this.outbox.enqueue({
+        org_id: orgId,
+        event_type: 'payment.decided',
+        payload: { intent_id: intent.id, agent_id: intent.agent_id, decision: 'require_approval', status: 'approved', quorum_reached: true },
+        cause_id: approval.id,
       });
       return { intent_id: intent.id, decision: 'allow', status: 'approved', reasons: [{ message: 'Approved; reservation held, ready to execute' }] };
     }

@@ -78,6 +78,78 @@ jobs:
       - name: Build
         run: npm run build
 
+  rls-isolation:
+    name: RLS tenant-isolation (leakage test)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: agentauth
+          POSTGRES_PASSWORD: agentauth
+          POSTGRES_DB: agentauth
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U agentauth"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install backend dependencies
+        run: npm ci --no-audit --no-fund
+        working-directory: backend
+
+      - name: Build backend
+        run: npm run build
+        working-directory: backend
+
+      # Boot the real app once so TypeORM synchronize creates the base schema;
+      # the RLS script then applies its policies on top. RLS itself is tested
+      # over throwaway non-owner connections, never the app's role.
+      - name: Sync database schema (TypeORM synchronize on boot)
+        run: node dist/main.js & disown; sleep 1
+        working-directory: backend
+        env:
+          PORT: "4999"
+          DATABASE_URL: postgres://agentauth:agentauth@localhost:5432/agentauth
+          REDIS_URL: redis://localhost:6379
+
+      - name: Wait for schema sync
+        run: |
+          for i in $(seq 1 40); do
+            if curl -sf -m 2 http://127.0.0.1:4999/health > /dev/null; then break; fi
+            sleep 1
+          done
+          curl -sf -m 2 http://127.0.0.1:4999/health
+
+      - name: RLS tenant-isolation leakage test
+        working-directory: backend
+        env:
+          PGHOST: 127.0.0.1
+          PGPORT: "5432"
+          PGUSER: agentauth
+          PGPASSWORD: agentauth
+          PGDATABASE: agentauth
+        run: node scripts/rls-leakage-test.js
+
   e2e:
     name: E2E (golden path)
     runs-on: ubuntu-latest

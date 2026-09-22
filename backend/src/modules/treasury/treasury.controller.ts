@@ -11,6 +11,8 @@ import { TreasuryBudgetsService } from './budgets.service';
 import { TreasuryLedgerService } from './ledger.service';
 import { AUTH_REQUEST_KEY, PublicApi } from '../auth/api-key.guard';
 import { RailsService } from './rails/rails.service';
+import { TreasuryWebhookOutboxService } from './webhook-outbox.service';
+import { TreasuryWebhookOutbox } from '../../database/entities';
 import { Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import { TreasuryRailConnection } from '../../database/entities';
@@ -62,6 +64,10 @@ class MandateDto {
   @IsString() signature: string;
   @IsIn(['webauthn', 'eip712', 'ed25519_test']) signing_method: string;
   @IsString() signing_key_ref: string;
+}
+
+class RequeueOutboxDto {
+  @IsOptional() @IsString() org_id?: string;
 }
 
 class RevokeMandateDto {
@@ -132,8 +138,11 @@ export class TreasuryController {
     private readonly budgets: TreasuryBudgetsService,
     private readonly ledger: TreasuryLedgerService,
     private readonly rails: RailsService,
+    private readonly outbox: TreasuryWebhookOutboxService,
     @InjectRepository(TreasuryRailConnection)
     private readonly railConnectionRepo: Repository<TreasuryRailConnection>,
+    @InjectRepository(TreasuryWebhookOutbox)
+    private readonly outboxRepo: Repository<TreasuryWebhookOutbox>,
   ) {}
 
   // ── Payments (agent-facing) ──────────────────────────────────────────────
@@ -405,6 +414,40 @@ export class TreasuryController {
       id: c.id, rail: c.rail, provider: c.provider, environment: c.environment,
       display_name: c.display_name, status: c.status, created_at: c.created_at,
     }));
+  }
+
+  // ── Webhook outbox (§12.3) ───────────────────────────────────────────────
+
+  @Get('webhooks/outbox')
+  @ApiOperation({ summary: 'Treasury lifecycle events and their delivery state' })
+  async listOutbox(@Req() request: any, @Query('org_id') orgId?: string, @Query('status') status?: string) {
+    const where: any = { org_id: orgFrom(request, orgId) };
+    if (status) where.status = status;
+    const rows = await this.outboxRepo.find({ where, order: { created_at: 'DESC' }, take: 100 });
+    return rows.map((r) => ({
+      id: r.id,
+      event_type: r.event_type,
+      event_id: r.payload?.event_id ?? null,
+      status: r.status,
+      attempts: r.attempts,
+      last_error: r.last_error,
+      available_at: r.available_at,
+      delivered_at: r.delivered_at,
+      created_at: r.created_at,
+    }));
+  }
+
+  @Post('webhooks/outbox/requeue')
+  @ApiOperation({ summary: 'Requeue permanently failed treasury events (ops recovery)' })
+  async requeueOutbox(@Req() request: any, @Body() dto: RequeueOutboxDto, @Query('org_id') orgId?: string) {
+    const requeued = await this.outbox.requeueFailed(orgFrom(request, dto?.org_id ?? orgId));
+    return { requeued };
+  }
+
+  @Post('webhooks/outbox/drain')
+  @ApiOperation({ summary: 'Deliver all due events now (normally runs every 2s)' })
+  async drainOutbox() {
+    return this.outbox.drain();
   }
 
   // ── Maintenance ──────────────────────────────────────────────────────────

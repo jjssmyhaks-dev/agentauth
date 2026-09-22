@@ -12,6 +12,8 @@ import {
   TreasuryPaymentIntent, TreasuryAuthorization, TreasuryKillSwitch,
   TreasuryApproval, TreasuryApprovalDecision,
 } from './treasury-entities';
+import { TreasuryProofNonce, TreasuryWebhookOutbox } from './treasury-entities-rails';
+import { TreasuryWebhookOutboxService } from './webhook-outbox.service';
 import { Agent } from '../../database/entities';
 
 const ORG = '11111111-1111-4111-8111-111111111111';
@@ -148,6 +150,13 @@ describe('TreasuryService decision path', () => {
         { provide: getRepositoryToken(TreasuryAuthorization), useValue: authorizationRepo },
         { provide: getRepositoryToken(TreasuryKillSwitch), useValue: killSwitchRepo },
         { provide: getRepositoryToken(Agent), useValue: makeRepo() },
+        { provide: getRepositoryToken(TreasuryProofNonce), useValue: makeRepo() },
+        { provide: getRepositoryToken(TreasuryWebhookOutbox), useValue: makeRepo() },
+        { provide: TreasuryWebhookOutboxService, useFactory: () => {
+          const repo = makeRepo();
+          repo.findOne.mockResolvedValue(null);
+          return new TreasuryWebhookOutboxService(repo as any, { post: jest.fn(async () => ({})) } as any);
+        } },
       ],
     })
       .overrideProvider(TreasuryService)
@@ -175,6 +184,13 @@ describe('TreasuryService decision path', () => {
         { provide: getRepositoryToken(TreasuryApproval), useValue: approvalRepo },
         { provide: getRepositoryToken(TreasuryApprovalDecision), useValue: makeRepo() },
         { provide: getRepositoryToken(Agent), useValue: makeRepo() },
+        { provide: getRepositoryToken(TreasuryProofNonce), useValue: makeRepo() },
+        { provide: getRepositoryToken(TreasuryWebhookOutbox), useValue: makeRepo() },
+        { provide: TreasuryWebhookOutboxService, useFactory: () => {
+          const repo = makeRepo();
+          repo.findOne.mockResolvedValue(null);
+          return new TreasuryWebhookOutboxService(repo as any, { post: jest.fn(async () => ({})) } as any);
+        } },
       ],
     }).compile();
 

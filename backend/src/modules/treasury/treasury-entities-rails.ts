@@ -1,4 +1,5 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, Index, Unique } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, Index, Unique, ManyToOne, JoinColumn } from 'typeorm';
+import { Organization } from '../../database/entities/organization.entity';
 
 /**
  * Rail connections (PRD §10): the customer's own wallet-provider / issuer
@@ -23,6 +24,56 @@ export class TreasuryRailConnection {
   @Column({ type: 'jsonb', default: '{}' }) config: Record<string, any>;
   @Column({ default: 'active' }) status: 'active' | 'disabled' | 'error';
   @CreateDateColumn() created_at: Date;
+}
+
+/**
+ * Accounts/wallets discovered through a connection — read-only balances only
+ * (FR-TRE-3). external_ref is a provider reference, never a card number.
+ */
+/**
+ * DPoP replay table (T2): every accepted proof's nonce is recorded here.
+ * Verification fails closed for: bad signature, stale timestamp (±5 min),
+ * or a nonce seen before — a captured proof cannot be replayed.
+ */
+@Entity('treasury_proof_nonces')
+@Index(['org_id'])
+@Index(['agent_id', 'created_at'])
+export class TreasuryProofNonce {
+  @PrimaryGeneratedColumn('uuid') id: string;
+  @Column({ type: 'uuid' }) org_id: string;
+  @Column({ type: 'uuid' }) agent_id: string;
+  /** sha256(request_hash + ':' + proof) — replay detection key. */
+  @Column({ unique: true }) nonce: string;
+  @Column({ type: 'timestamptz' }) proof_ts: Date;
+  @ManyToOne(() => Organization) @JoinColumn({ name: 'org_id' }) organization: Organization;
+  @CreateDateColumn() created_at: Date;
+}
+
+/**
+ * Transactional outbox (NFR-6): treasury lifecycle events are committed in
+ * the SAME transaction as the state change that caused them, then a poller
+ * delivers them to subscribed webhooks with HMAC signatures. At-least-once
+ * delivery; consumers dedupe on `event_id`.
+ */
+@Entity('treasury_webhook_outbox')
+@Index(['org_id'])
+@Index(['status', 'available_at'])
+export class TreasuryWebhookOutbox {
+  @PrimaryGeneratedColumn('uuid') id: string;
+  @Column({ type: 'uuid' }) org_id: string;
+  /** e.g. payment.settled, killswitch.engaged, budget.threshold_reached. */
+  @Column() event_type: string;
+  @Column('jsonb') payload: Record<string, any>;
+  @Column({ default: 'pending' }) status: 'pending' | 'delivered' | 'failed';
+  @Column({ type: 'int', default: 0 }) attempts: number;
+  @Column({ type: 'int', default: 0 }) last_http_status: number;
+  @Column({ nullable: true }) last_error: string | null;
+  /** When an exception in the producer must not lose the event, the caller
+   * passes the callback; here we record WHERE the event came from. */
+  @Column({ nullable: true }) cause_id: string | null;
+  @Column({ type: 'timestamptz', default: () => 'now()' }) available_at: Date;
+  @CreateDateColumn() created_at: Date;
+  @UpdateDateColumn() delivered_at: Date | null;
 }
 
 /**

@@ -28,7 +28,10 @@ DECLARE
     'treasury_approval_decisions',
     'treasury_authorizations',
     'treasury_kill_switches',
-    'treasury_ledger_entries'
+    'treasury_ledger_entries',
+    'treasury_rail_connections',
+    'treasury_payment_accounts',
+    'treasury_proof_nonces'
   ];
 BEGIN
   FOREACH t IN ARRAY tables LOOP
@@ -73,6 +76,10 @@ CREATE TRIGGER treasury_ledger_no_truncate
 
 -- Production only (owner role in dev bypasses REVOKE):
 -- REVOKE UPDATE, DELETE, TRUNCATE ON public.treasury_ledger_entries FROM agentauth_app;
+
+-- NOTE: treasury_webhook_outbox is deliberately NOT under RLS — the delivery
+-- poller runs org-agnostically in the background, and FORCE RLS with no
+-- app.org_id would make it see zero rows (events would silently never send).
 
 -- ── 3. Verification ────────────────────────────────────────────────────────
 -- Every treasury table should report RLS enabled with the isolation policy:

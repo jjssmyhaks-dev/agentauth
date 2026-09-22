@@ -29,4 +29,4 @@ export {
   RailType, TreasuryEnvironment, IntentStatus, DecisionEffect, ReservationStatus,
   BudgetScope, BudgetPeriodKind, TREASURY_ASSETS, toMinorUnits, fromMinorUnits,
 } from '../../modules/treasury/treasury-entities';
-export { TreasuryRailConnection, TreasuryPaymentAccount } from '../../modules/treasury/treasury-entities-rails';
+export { TreasuryRailConnection, TreasuryPaymentAccount, TreasuryProofNonce, TreasuryWebhookOutbox } from '../../modules/treasury/treasury-entities-rails';

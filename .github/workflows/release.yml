@@ -23,7 +23,7 @@ jobs:
     name: Dashboard static bundle (root Vite app)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-node@v5
         with:
@@ -48,7 +48,7 @@ jobs:
     name: Backend + dashboard image (GHCR)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - uses: docker/setup-buildx-action@v3
 
@@ -85,7 +85,7 @@ jobs:
     needs: [dashboard-artifact, docker-image]
     if: github.event_name == 'push'
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - name: Download dashboard bundle
         uses: actions/download-artifact@v4

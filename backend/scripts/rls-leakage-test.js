@@ -210,19 +210,29 @@ async function main() {
   });
   await admin.connect();
 
-  // ── 0. Environment shape ────────────────────────────────────────────────
+  // ── 0. Apply the RLS policy pack (idempotent) ─────────────────────────────
+  // The test proves what the shipped policy DOES; applying it here keeps this
+  // self-contained in CI (fresh DB) and in dev. treasury-rls.sql is written to
+  // be safely re-runnable.
+  const fs = require('fs');
+  const path = require('path');
+  const sqlPath = path.join(__dirname, 'treasury-rls.sql');
+  await admin.query(fs.readFileSync(sqlPath, 'utf8'));
+  pass(`applied treasury-rls.sql (${path.basename(sqlPath)})`);
+
+  // ── 0b. Environment shape ────────────────────────────────────────────────
   const { rows: enabledRows } = await admin.query(
     `select tablename from pg_tables where schemaname='public' and rowsecurity = true and tablename like 'treasury_%'`,
   );
   const enabled = new Set(enabledRows.map((r) => r.tablename));
   for (const t of TENANT_TABLES) {
-    if (!enabled.has(t)) fail(`RLS not enabled on ${t} (run treasury-rls.sql first)`);
+    if (!enabled.has(t)) fail(`RLS not enabled on ${t} (treasury-rls.sql did not cover it)`);
   }
   if (enabled.has('treasury_webhook_outbox')) {
     fail('treasury_webhook_outbox must NOT have RLS (the org-agnostic poller would see zero rows and silently stop delivering)');
   }
   if (failures.length) {
-    console.error('\nRLS environment incomplete — apply backend/scripts/treasury-rls.sql first.');
+    console.error('\nRLS environment incomplete — treasury-rls.sql is missing tables/policies for the schema in this checkout.');
     process.exit(1);
   }
   console.log(`  ✓ RLS enabled on all ${TENANT_TABLES.length} tenant tables; outbox excluded as designed`);
